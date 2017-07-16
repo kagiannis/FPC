@@ -645,12 +645,12 @@ int prefix_codes_encode(U8 *dest,U8 *src,U32 sym_num,const Enode *lookup)
 	
 	while(src < src_end){//??????
 		REPEAT(RENORM_NUM,
-				sym = *src;
-				code = lookup[sym].val;
-				bl = lookup[sym].len;
-				src += NUM_STREAMS;
-				bits |= code << bits_av;
-				bits_av += bl;
+			sym = *src;
+			code = lookup[sym].val;
+			bl = lookup[sym].len;
+			src += NUM_STREAMS;
+			bits |= code << bits_av;
+			bits_av += bl;
 		)
 		WARCH(dest,bits);
 		tmp = bits_av >> 3;
@@ -1103,20 +1103,20 @@ int main(int argc,char **argv)
 		if(argv[count][2] != 0)
 			help(argv);
 		switch(argv[count][1]){
-			case 'B':
-				bench = 1;
-				break;
-			case 'b':
-				if(++count < argc)
-					bsize = atoi(argv[count]) * 1024;
-				else
-					help(argv);
-				break;
-			case 'd':
-				compress = 0;
-				break;
-			default:
+		case 'B':
+			bench = 1;
+			break;
+		case 'b':
+			if(++count < argc)
+				bsize = atoi(argv[count]) * 1024;
+			else
 				help(argv);
+			break;
+		case 'd':
+			compress = 0;
+			break;
+		default:
+			help(argv);
 		}
 		count++;
 	}
