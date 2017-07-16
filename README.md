@@ -58,4 +58,6 @@ for fpc actual file size difference is 4 bytes
 (2 bytes magic number + 2 bytes end of stream)
 ```
 ### compile
+```
 gcc/clang -O3 -std=c99 fpc.c -o fpc
+```
