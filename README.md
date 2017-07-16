@@ -29,7 +29,7 @@ compression speed 49.70 MB/s, decompression speed 698.06 MB/s
 huff0
 100000000 ->  63258831 (63.26%),  576.3 MB/s ,  694.0 MB/s 
 
-actual output file size for huf0 (non benchmark mode) 63423952
+actual output file size for huff0 (non benchmark mode) 63423952
 for fpc actual file size difference is 4 bytes
 (2 bytes magic number + 2 bytes end of stream)
 ```
@@ -50,7 +50,7 @@ compression speed 4.04 MB/s, decompression speed 72.70 MB/s
 huff0
 100000000 ->  63258831 (63.26%),   52.5 MB/s ,   52.6 MB/s
 
-actual output file size for huf0 (non benchmark mode) 63423952
+actual output file size for huff0 (non benchmark mode) 63423952
 for fpc actual file size difference is 4 bytes
 (2 bytes magic number + 2 bytes end of stream)
 ```
