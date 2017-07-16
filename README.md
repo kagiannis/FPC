@@ -4,8 +4,11 @@
  * Adaptive block subdivision
  * Optimal length limited prefix codes 
  using fast implementation of package - merge algorithm
+ * Configurable number of streams (default 3)
+ * Configurable max bit length (default 11)
  * Fast even for inorder cpus
  * Fast even when compression ratio is low,because FPC decodes 1 byte a time
+ * License ISC
 ## Current Limitations
  * The bit length encoding is simple and hurts compression ratio
  * Works only for little endian cpus
