@@ -17,7 +17,6 @@
 
 //TODO
 //improve header encoding
-//sym_num constant?
 //support big endian
 //corrupt input
 #include <assert.h>
