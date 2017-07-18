@@ -17,6 +17,7 @@
 
 //TODO
 //improve header encoding
+//sym_num constant?
 //support big endian
 //corrupt input
 #include <assert.h>
@@ -25,7 +26,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 #include <math.h>
 
 //config
@@ -37,9 +37,7 @@
 #define AMAX_BIT_LEN 14
 #define HEADER_SIZE (2*(NUM_STREAMS-1))
 #define MAX_HEADER_STAT_SIZE 128
-#define MAX_OUTPUT(x) ((x) + ((x)/(63 << 10)*4) + 64)//TODO
-#define MAGIC_NUM 0xf1f2
-#define BLOCK_READ (64 << 20)
+
 
 #if UINTPTR_MAX > 0x100000000ULL
 #	define ARCH64
@@ -553,7 +551,7 @@ U32 get_input_nibbles()
 }
 
 //return bytes written
-U32 write_prefix_descr(Enode *lookup,U32 sym_num,U8 *res)
+U32 write_prefix_descr(Enode *lookup,int sym_num,U8 *res)
 {
 	U32 previous,count,a;
 	init_nibble(res);
@@ -590,7 +588,7 @@ U32 write_prefix_descr(Enode *lookup,U32 sym_num,U8 *res)
 	return flush_nibbles();
 }
 
-U32 read_prefix_descr(U8 *len,U32 sym_num,U8 *in)
+U32 read_prefix_descr(U8 *len,int sym_num,U8 *in)
 {
 	//TODO check invalid
 	int bl,previous = 0,a = 0,c;
@@ -635,7 +633,7 @@ int read_header(U16 *pos,U32 *stream_size)
 
 //1 stream a time
 //dest should have some 8? more free bytes
-int prefix_codes_encode(U8 *dest,U8 *src,U32 sym_num,const Enode *lookup)
+int prefix_codes_encode(U8 *dest,U8 *src,int sym_num,const Enode *lookup)
 {
 	U8 *src_end = src + sym_num - (sym_num%(RENORM_NUM*NUM_STREAMS));
 	U8 *dest_start = dest,sym,bl;
@@ -721,7 +719,7 @@ int prefix_codes_encode(U8 *dest,U8 *src,U32 sym_num,const Enode *lookup)
 	U8 *stream_pos##A;
 
 //src stream should have 8 additional free bytes
-void prefix_codes_decode(U8 *dest,U32 dest_size,U8 *src,U32 src_size,const Dnode *lookup)
+void prefix_codes_decode(U8 *dest,int dest_size,U8 *src,int src_size,const Dnode *lookup)
 {
 	REPEAT_ARG(NUM_STREAMS,DEC_DECLARE);
 	U32 code,bl;
@@ -753,7 +751,7 @@ void prefix_codes_decode(U8 *dest,U32 dest_size,U8 *src,U32 src_size,const Dnode
 
 //encode bytes,return bytes written
 //size < 64Kb
-U32 prefix_encode(void *output,const void *in,U32 size,U32 sym_num)
+int prefix_encode(void *output,const void *in,int size,int sym_num)
 {
 	U32 a,b,count[MAX_SYM_NUM] = {0},stream_size[NUM_STREAMS],compressed_size;
 	U8 *out_start = (U8 *)output,*header_start,*out = (U8 *)output;
@@ -803,7 +801,7 @@ U32 prefix_encode(void *output,const void *in,U32 size,U32 sym_num)
 	return compressed_size;
 }
 
-void prefix_decode(void * output,U32 out_size,const void *input,U32 in_size,U32 sym_num)
+void prefix_decode(void * output,int out_size,const void *input,int in_size,int sym_num)
 {
 	if(in_size == 1){
 		memset(output,*((char*)input),out_size);
@@ -821,32 +819,6 @@ void prefix_decode(void * output,U32 out_size,const void *input,U32 in_size,U32 
 	construct_dec_table(bit_len,lookup,sym_num);
 	//decode
 	prefix_codes_decode(out,out_size,in + bit_descr_size,in_size - bit_descr_size,lookup);
-}
-
-//simple adler32 checksum
-//not the best just for testing
-uint32_t hash(unsigned char *data, size_t len)
-{
-
-#define MOD_ADLER 65521
-#define MAX_NONMOD 5552
-
-	U32 a = 1,b = 0;
-	size_t index;
-again:
-	for(index = 0;index < MIN(len,MAX_NONMOD); index++){
-		assert(b <= b+a);
-		assert(a <= a + data[index]);
-		a = a + data[index];
-		b = b + a;
-	}
-	if(index < len){
-		len -= MAX_NONMOD;
-		a = a % MOD_ADLER;
-		b = b % MOD_ADLER;
-		goto again;
-	}
-	return ((b % MOD_ADLER) << 16) | (a % MOD_ADLER);
 }
 
 INLINE void 
@@ -868,15 +840,15 @@ void * MALLOC(size_t size)
 	return ptr;
 }
 
-U32 block_encode(void *output,void *input,U32 bsize)
+size_t block_encode(void *output,void *input,int bsize)
 {
 	W16(output,bsize);//LE
-	U32 tmp = prefix_encode(((char *)output) + 4,input,bsize,256);
+	size_t tmp = prefix_encode(((char *)output) + 4,input,bsize,256);
 	W16(((char*)output) + 2,tmp);//LE
 	return 4 + tmp;
 }
 
-U32 comp_block_adaptive(void * output,void * input,U32 inlen)
+size_t comp_block_adaptive(void * output,void * input,size_t inlen)
 {
 	
 #define ADAPT_MOD 64
@@ -887,7 +859,7 @@ U32 comp_block_adaptive(void * output,void * input,U32 inlen)
 //#define LOG2(A) (A == 0 ? 0 : round(16*log2(A))) 
 
 	int Cfreq[MBLOCK+1][256],dp[64];
-	U8 *block_size = MALLOC((inlen/STEP)+1);
+	U8 *block_size = (U8 *) MALLOC((inlen/STEP)+1);
 	U8 *in = (U8 *)input,*out = (U8 *)output,*out_start = (U8 *) output;
 	
 	//init
@@ -947,7 +919,7 @@ U32 comp_block_adaptive(void * output,void * input,U32 inlen)
 //return compressed size
 //bsize < 64KB
 //if bsize == 0 then adaptive
-U32 comp_block(void * output,void * input,U32 inlen,U32 bsize)
+size_t comp_block(void * output,void * input,size_t inlen,int bsize)
 {
 	if(bsize == 0)
 		return comp_block_adaptive(output,input,inlen);
@@ -958,14 +930,15 @@ U32 comp_block(void * output,void * input,U32 inlen,U32 bsize)
 		in += step;
 		inlen -= step;
 	}
-	W16(out,0);
-	return (U32)(out - out_start);
+	//W16(out,0);
+	return (size_t)(out - out_start);
 }
 
-U32 dec_block(void * output,void * input,U32 inlen)
+size_t dec_block(void * output,void * input,size_t inlen,size_t max_output)
 {
 	char *in = (char *)input,*in_start = (char *)input,*out = (char *)output;
-	while(inlen > 0){
+	char *out_end = out + max_output;
+	while(out < out_end && inlen > 0){
 		U32 d = L16(in);//LE
 		U32 e = L16(in+2);//LE
 		in += 4;
@@ -975,169 +948,5 @@ U32 dec_block(void * output,void * input,U32 inlen)
 		in += e;
 		inlen -= 4+e;
 	}
-	return (U32)(in-in_start);
-}
-
-
-void bench_file(FILE *in,U32 chunk_size,U32 bsize)
-{
-	U64 csize = 0,size = 0,a;
-	char *input = (char *)MALLOC(chunk_size+128);
-	char *output = (char *)MALLOC(MAX_OUTPUT(chunk_size));//TODO
-	clock_t t0,t1,t2,t3,t4,compt = 0,dect = 0;
-
-	//bench
-	while ((a = fread(input,1,chunk_size,in)) > 0){
-		U32 h1 = hash(input,a);
-		
-		t0 = clock();
-		comp_block(output,input,a,bsize);
-		t1 = clock();
-		comp_block(output,input,a,bsize);
-		t2 = clock();
-		comp_block(output,input,a,bsize);
-		t3 = clock();
-		U32 tmp = comp_block(output,input,a,bsize);
-		t4 = clock();
-		
-		compt += MIN(MIN(MIN(t4-t3,t3-t2),t2-t1),t1-t0);
-		
-		t0 = clock();
-		dec_block(input,output,tmp);
-		t1 = clock();
-		dec_block(input,output,tmp);
-		t2 = clock();
-		dec_block(input,output,tmp);
-		t3 = clock();
-		dec_block(input,output,tmp);
-		t4 = clock();
-		dect += MIN(MIN(MIN(t4-t3,t3-t2),t2-t1),t1-t0);
-		
-		U32 h2 = hash(input,a);
-		if(h1 != h2)
-			error("ERROR:Input differs from output.");
-		csize += tmp;
-		size += a;
-	}
-	printf("%llu -> %llu, %.2lf%% of original,ratio = %.3lf\n"
-			"compression speed %.2lf MB/s, decompression speed %.2lf MB/s\n",size,csize,
-	((double)csize)/((double)size)*100,((double)size)/((double)csize),
-	((double)size)/1024/1024/((double)compt / CLOCKS_PER_SEC),((double)size)/1024/1024/((double)dect / CLOCKS_PER_SEC));
-
-	free(input);
-	free(output);
-}
-
-//format bits
-//magic 16
-//for every block
-// 16 dec size | 16 enc size| enc size bytes
-//if enc size == 1 then read a byte and repeate dec size times
-//if enc size == dec size then memcpy
-//return compressed size on success else 0
-
-//in and out must be open
-U64 comp_file(FILE *in,FILE *out,U32 bsize)
-{
-	int block = (bsize == 0 ? BLOCK_READ : bsize );
-	U8 *input = (U8 *) MALLOC(MAX_OUTPUT(block)),*output = (U8 *) MALLOC(MAX_OUTPUT(block));
-	U64 res = 4;
-	U32 a,c,magic = MAGIC_NUM;
-	fwrite(&magic,2,1,out);
-	while ((a = fread(input,1,block,in)) > 0){
-		c = comp_block(output,input,a,bsize);
-		fwrite(output,c,1,out);
-		res += 4 + ((U64)c);
-	}
-	a = 0;
-	fwrite(&a,2,1,out);
-	free(input);
-	free(output);
-	return res;
-}
-
-//return decompressed size
-U64 dec_file(FILE *in,FILE *out)
-{
-	U8 input[MAX_OUTPUT(1<<16)],output[MAX_OUTPUT(1<<16)];
-	U64 res = 0;
-	U32 a = 0,c;
-
-	fread(&a,2,1,in);
-	if(a != MAGIC_NUM)
-		error("ERROR:File not compressed.");
-
-	fread(&a,2,1,in);
-	while(a != 0){
-		fread(&c,2,1,in);
-		U32 b = fread(input,1,c,in);
-		if(b != c)
-			error("ERROR:File corrupted.");
-		prefix_decode(output,a,input,c,256);//TODO: bit_len
-		res += (U64)a;
-		fwrite(output,1,a,out);
-		fread(&a,2,1,in);
-	}
-	return res;
-}
-
-void help(char **argv)
-{
-	//make decompress default
-	printf("Fast Prefix Coder v0.1\n\n"
-			"usage: %s [options] input [output]\n\n"
-			"  -B           : benchmark file\n"
-			"  -b num       : block size in KB, 1<= num <= 63, 0 for adaptive (default 16)\n"
-			//"  -c           : compress\n"
-			"  -d           : decompress\n",*argv);
-	exit(EXIT_FAILURE);
-}
-
-int main(int argc,char **argv)
-{
-	int bsize = 16 * 1024;
-	int count = 1,bench = 0,compress = 1;
-	
-	while(count < argc && argv[count][0] == '-'){
-		if(argv[count][2] != 0)
-			help(argv);
-		switch(argv[count][1]){
-		case 'B':
-			bench = 1;
-			break;
-		case 'b':
-			if(++count < argc)
-				bsize = atoi(argv[count]) * 1024;
-			else
-				help(argv);
-			break;
-		case 'd':
-			compress = 0;
-			break;
-		default:
-			help(argv);
-		}
-		count++;
-	}
-	if(count >= argc || bsize < 0 || bsize > 63*1024)
-		help(argv);
-	FILE *in = fopen(argv[count++],"r");
-	if(in == 0)
-		error("ERROR:Unable to open input");
-	if(bench == 0){
-		FILE *out = fopen(argv[count++],"w");
-		if(out == 0)
-			error("ERROR:Unable to open output");
-		if(count != argc)
-			help(argv);
-		if(compress == 1)
-			comp_file(in,out,bsize);
-		else
-			dec_file(in,out);
-	}else{
-		if(count != argc)
-			help(argv);
-		bench_file(in,BLOCK_READ,bsize);
-	}
-	return 0;
+	return (size_t)(in-in_start);
 }
