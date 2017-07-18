@@ -89,7 +89,7 @@ again:
 U64 comp_file(FILE *in,FILE *out,int bsize)
 {
 	int block = (bsize == 0 ? BLOCK_READ : bsize );
-	U8 *output = (U8 *) MALLOC(MAX_OUTPUT(block)),*input = (U8 *) MALLOC(MAX_OUTPUT(block));
+	U8 *output = (U8 *) MALLOC(FPC_MAX_OUTPUT(block)),*input = (U8 *) MALLOC(FPC_MAX_OUTPUT(block));
 	U64 res = 4;
 	U32 a,c,magic = MAGIC_NUM;
 	fwrite(&magic,2,1,out);
@@ -108,7 +108,7 @@ U64 comp_file(FILE *in,FILE *out,int bsize)
 //return decompressed size
 U64 dec_file(FILE *in,FILE *out)
 {
-	U8 output[MAX_OUTPUT(1<<16)],input[MAX_OUTPUT(1<<16)];
+	U8 output[FPC_MAX_OUTPUT(1<<16)],input[FPC_MAX_OUTPUT(1<<16)];
 	U64 res = 0;
 	U32 a = 0,c;
 
@@ -133,7 +133,7 @@ U64 dec_file(FILE *in,FILE *out)
 void bench_file(FILE *in,U32 chunk_size,int bsize)
 {
 	U64 csize = 0,size = 0,a;
-	size_t max_out = MAX_OUTPUT(chunk_size);
+	size_t max_out = FPC_MAX_OUTPUT(chunk_size);
 	char *output = (char *)MALLOC(max_out);//TODO
 	char *input = (char *)MALLOC(chunk_size+128);
 	clock_t t0,t1,t2,t3,t4,compt = 0,dect = 0;
