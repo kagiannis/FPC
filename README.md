@@ -59,5 +59,5 @@ for fpc actual file size difference is 4 bytes
 ```
 ### compile
 ```
-gcc/clang -O3 -std=c99 fpc.c -o fpc
+make
 ```
