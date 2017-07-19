@@ -17,7 +17,6 @@
 
 //TODO
 //improve header encoding
-//sym_num constant?
 //support big endian
 //corrupt input
 #include <assert.h>
@@ -95,7 +94,7 @@
 #	define BSWAP32(x) __builtin_bswap32(x)
 #	define BSWAP64(x) __builtin_bswap64(x)
 #else
-#	define INLINE inline
+#	define INLINE static inline
 #	define likely(x) x
 #	define unlikely(x) x
 #	define BSWAP32(x)\
@@ -112,6 +111,57 @@
             (((x) >> 24) & 0x0000000000ff0000ULL) |\
             (((x) >> 40) & 0x000000000000ff00ULL) |\
             (((x) >> 56) & 0x00000000000000ffULL)
+#endif
+
+//endian detection taken from nemequ psnip
+/* GCC (and compilers masquerading as GCC) define  __BYTE_ORDER__. */
+#if defined(__BYTE_ORDER__) && defined(__ORDER_LITTLE_ENDIAN__) && (__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)
+#	define MEM_LITTLE_ENDIAN
+#elif defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__) && (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+#	define MEM_BIG_ENDIAN
+/* We know the endianness of some common architectures.  Common
+ * architectures not listed (ARM, POWER, MIPS, etc.) here are
+ * bi-endian. */
+#elif defined(__amd64) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
+#	define MEM_LITTLE_ENDIAN
+#elif defined(__s390x__) || defined(__zarch__)
+#	define MEM_BIG_ENDIAN
+/* Looks like we'll have to rely on the platform.  If we're missing a
+ * platform, please let us know. */
+#elif defined(_WIN32)
+#	define MEM_LITTLE_ENDIAN
+#elif defined(sun) || defined(__sun) /* Solaris */
+#	include <sys/byteorder.h>
+#	if defined(_LITTLE_ENDIAN)
+#		define MEM_LITTLE_ENDIAN
+#	elif defined(_BIG_ENDIAN)
+#		define MEM_BIG_ENDIAN
+#	endif
+#elif defined(__APPLE__)
+#	include <libkern/OSByteOrder.h>
+#	if defined(__LITTLE_ENDIAN__)
+#		define MEM_LITTLE_ENDIAN
+#	elif defined(__BIG_ENDIAN__)
+#		define MEM_BIG_ENDIAN
+#	endif
+#elif defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__bsdi__) || defined(__DragonFly__) || defined(BSD)
+#	include <machine/endian.h>
+#	if defined(__BYTE_ORDER) && (__BYTE_ORDER == __LITTLE_ENDIAN)
+#		define MEM_LITTLE_ENDIAN
+#	elif defined(__BYTE_ORDER) && (__BYTE_ORDER == __BIG_ENDIAN)
+#		define MEM_BIG_ENDIAN
+#	endif
+#elif defined(__linux__) || defined(__linux) || defined(__gnu_linux__)
+#	include <endian.h>
+#	if defined(__BYTE_ORDER) && defined(__LITTLE_ENDIAN) && (__BYTE_ORDER == __LITTLE_ENDIAN)
+#		define MEM_LITTLE_ENDIAN
+#	elif defined(__BYTE_ORDER) && defined(__BIG_ENDIAN) && (__BYTE_ORDER == __BIG_ENDIAN)
+#		define MEM_BIG_ENDIAN
+#	endif
+#endif
+
+#if ! (defined(MEM_LITTLE_ENDIAN) || defined(MEM_BIG_ENDIAN))
+#	error "ERROR:Can not detect endian"
 #endif
 
 //types
@@ -822,20 +872,20 @@ void prefix_decode(void * output,int out_size,const void *input,int in_size,int 
 }
 
 INLINE void 
-error(const char *s)
+fpc_error(const char *s)
 {
         fprintf(stderr,"%s\n",s);
         exit(EXIT_FAILURE);
 }
 
 INLINE
-void * MALLOC(size_t size)
+void * fpc_malloc(size_t size)
 {
 	void * ptr;
 	ptr = malloc(size);
 	
 	if(ptr == 0 && size != 0)
-		error("ERROR:could not allocate memory\n");
+		fpc_error("ERROR:could not allocate memory\n");
 	
 	return ptr;
 }
@@ -859,7 +909,7 @@ size_t comp_block_adaptive(void * output,void * input,size_t inlen)
 //#define LOG2(A) (A == 0 ? 0 : round(16*log2(A))) 
 
 	int Cfreq[MBLOCK+1][256],dp[64];
-	U8 *block_size = (U8 *) MALLOC((inlen/STEP)+1);
+	U8 *block_size = (U8 *) fpc_malloc((inlen/STEP)+1);
 	U8 *in = (U8 *)input,*out = (U8 *)output,*out_start = (U8 *) output;
 	
 	//init
@@ -876,8 +926,8 @@ size_t comp_block_adaptive(void * output,void * input,size_t inlen)
 			Cfreq[cur][c] = Cfreq[prev][c];
 		for(;b >= a;b--)
 			Cfreq[cur][in[b]]++;
-		int best = INT_MAX,bsize;//MAX
-		for(int c = 1;c <= MBLOCK && (c*STEP) <= inlen - a;c++){//???
+		int best = INT_MAX,bsize;
+		for(int c = 1;c <= MBLOCK && (c*STEP) <= inlen - a;c++){
 			//bits = -sum(ni*log2(ni) + total*log2(total))
 			int res = 0;
 			for(int d = 0;d < 256;d++){
@@ -897,15 +947,11 @@ size_t comp_block_adaptive(void * output,void * input,size_t inlen)
 	}
 	
 	//now encode using block sizes
-	int a = 0,res = 0;
-	//if not max block possible merge remaining
-	//if(block_size[0] != MBLOCK){//??????
-		out += block_encode(out,in,(inlen % STEP) + (block_size[0] * STEP));
-		in += block_size[0] * STEP;
-		a = block_size[0];
-	//}else{
-	//	out += block_encode(out,in,inlen % STEP);
-	//}
+	int a = 0;
+	out += block_encode(out,in,(inlen % STEP) + (block_size[0] * STEP));
+	in += block_size[0] * STEP;
+	a = block_size[0];
+
 	in += inlen % STEP;
 	for(;a < block_end;a += block_size[a]){
 		out += block_encode(out,in,block_size[a] * STEP);
@@ -930,7 +976,6 @@ size_t comp_block(void * output,void * input,size_t inlen,int bsize)
 		in += step;
 		inlen -= step;
 	}
-	//W16(out,0);
 	return (size_t)(out - out_start);
 }
 

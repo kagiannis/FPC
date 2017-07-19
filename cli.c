@@ -13,6 +13,7 @@
  *  ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  *  OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
+
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -31,21 +32,21 @@ typedef uint32_t U32;
 typedef uint16_t U16;
 typedef uint8_t U8;
 
-inline void 
-error(const char *s)
+static inline void 
+my_error(const char *s)
 {
         fprintf(stderr,"%s\n",s);
         exit(EXIT_FAILURE);
 }
 
-inline
-void * MALLOC(size_t size)
+static inline
+void * my_malloc(size_t size)
 {
 	void * ptr;
 	ptr = malloc(size);
 	
 	if(ptr == 0 && size != 0)
-		error("ERROR:could not allocate memory\n");
+		my_error("ERROR:could not allocate memory\n");
 	
 	return ptr;
 }
@@ -89,7 +90,7 @@ again:
 U64 comp_file(FILE *in,FILE *out,int bsize)
 {
 	int block = (bsize == 0 ? BLOCK_READ : bsize );
-	U8 *output = (U8 *) MALLOC(FPC_MAX_OUTPUT(block)),*input = (U8 *) MALLOC(FPC_MAX_OUTPUT(block));
+	U8 *output = (U8 *) my_malloc(FPC_MAX_OUTPUT(block)),*input = (U8 *) my_malloc(FPC_MAX_OUTPUT(block));
 	U64 res = 4;
 	U32 a,c,magic = MAGIC_NUM;
 	fwrite(&magic,2,1,out);
@@ -114,14 +115,14 @@ U64 dec_file(FILE *in,FILE *out)
 
 	fread(&a,2,1,in);
 	if(a != MAGIC_NUM)
-		error("ERROR:File not compressed.");
+		my_error("ERROR:File not compressed.");
 
 	fread(&a,2,1,in);
 	while(a != 0){
 		fread(&c,2,1,in);
 		U32 b = fread(input,1,c,in);
 		if(b != c)
-			error("ERROR:File corrupted.");
+			my_error("ERROR:File corrupted.");
 		prefix_decode(output,a,input,c,256);//TODO: bit_len
 		res += (U64)a;
 		fwrite(output,1,a,out);
@@ -134,8 +135,8 @@ void bench_file(FILE *in,U32 chunk_size,int bsize)
 {
 	U64 csize = 0,size = 0,a;
 	size_t max_out = FPC_MAX_OUTPUT(chunk_size);
-	char *output = (char *)MALLOC(max_out);//TODO
-	char *input = (char *)MALLOC(chunk_size+128);
+	char *output = (char *)my_malloc(max_out);//TODO
+	char *input = (char *)my_malloc(chunk_size+128);
 	clock_t t0,t1,t2,t3,t4,compt = 0,dect = 0;
 
 	//bench
@@ -167,7 +168,7 @@ void bench_file(FILE *in,U32 chunk_size,int bsize)
 		
 		U32 h2 = hash(input,a);
 		if(h1 != h2)
-			error("ERROR:Input differs from output.");
+			my_error("ERROR:Input differs from output.");
 		csize += tmp;
 		size += a;
 	}
@@ -222,11 +223,11 @@ int main(int argc,char **argv)
 		help(argv);
 	FILE *in = fopen(argv[count++],"r");
 	if(in == 0)
-		error("ERROR:Unable to open input");
+		my_error("ERROR:Unable to open input");
 	if(bench == 0){
 		FILE *out = fopen(argv[count++],"w");
 		if(out == 0)
-			error("ERROR:Unable to open output");
+			my_error("ERROR:Unable to open output");
 		if(count != argc)
 			help(argv);
 		if(compress == 1)
