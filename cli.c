@@ -15,9 +15,10 @@
  */
 
 #include <assert.h>
+#include <inttypes.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
 #include <time.h>
 
 #include "fpc.h"
@@ -26,13 +27,15 @@
 #define MAGIC_NUM 0xf1f2
 #define BLOCK_READ (64 << 20)
 #define MIN(A,B) ((A) < (B)?(A):(B))
+#define ERROR_READ my_error("ERROR:can not read from file");
+#define ERROR_WRITE my_error("ERROR:can not write to file");
 
 typedef uint64_t U64;
 typedef uint32_t U32;
 typedef uint16_t U16;
 typedef uint8_t U8;
 
-static inline void 
+static inline void
 my_error(const char *s)
 {
         fprintf(stderr,"%s\n",s);
@@ -44,11 +47,25 @@ void * my_malloc(size_t size)
 {
 	void * ptr;
 	ptr = malloc(size);
-	
+
 	if(ptr == 0 && size != 0)
 		my_error("ERROR:could not allocate memory\n");
-	
+
 	return ptr;
+}
+
+void W16_FILE_LE(FILE *out,U16 a)
+{
+	if(fputc(a,out) == EOF || fputc(a >> 8,out) == EOF)\
+		ERROR_WRITE
+}
+
+U16 R16_FILE_LE(FILE *in)
+{
+	int tmp1,tmp2 = 0;//silence warning
+	if((tmp1 = fgetc(in)) == EOF || (tmp2 = fgetc(in)) == EOF)
+		ERROR_READ
+	return tmp1 + (tmp2 << 8);
 }
 
 //simple adler32 checksum
@@ -90,14 +107,16 @@ again:
 U64 comp_file(FILE *in,FILE *out,int bsize)
 {
 	int block = (bsize == 0 ? BLOCK_READ : bsize );
-	U8 *output = (U8 *) my_malloc(FPC_MAX_OUTPUT(block)),*input = (U8 *) my_malloc(FPC_MAX_OUTPUT(block));
+	U8 *output = (U8 *) my_malloc(FPC_MAX_OUTPUT(block,bsize)),*input = (U8 *) my_malloc(FPC_MAX_OUTPUT(block,bsize));
 	U64 res = 4;
 	U32 a,c,magic = MAGIC_NUM;
-	fwrite(&magic,2,1,out);
+
+	W16_FILE_LE(out,magic);
 	while ((a = fread(input,1,block,in)) > 0){
 		c = comp_block(output,input,a,bsize);
-		fwrite(output,c,1,out);
-		res += 4 + ((U64)c);
+		if(fwrite(output,1,c,out) != c)
+			ERROR_WRITE
+		res += (U64)c;
 	}
 	a = 0;
 	fwrite(&a,2,1,out);
@@ -109,24 +128,21 @@ U64 comp_file(FILE *in,FILE *out,int bsize)
 //return decompressed size
 U64 dec_file(FILE *in,FILE *out)
 {
-	U8 output[FPC_MAX_OUTPUT(1<<16)],input[FPC_MAX_OUTPUT(1<<16)];
+	U8 output[1<<16],input[(1 << 16)+32];
 	U64 res = 0;
 	U32 a = 0,c;
 
-	fread(&a,2,1,in);
+	a = R16_FILE_LE(in);//LE
 	if(a != MAGIC_NUM)
 		my_error("ERROR:File not compressed.");
 
-	fread(&a,2,1,in);
-	while(a != 0){
-		fread(&c,2,1,in);
-		U32 b = fread(input,1,c,in);
-		if(b != c)
+	while((a = R16_FILE_LE(in)) != 0){
+		c = R16_FILE_LE(in);
+		if(fread(input,1,c,in) != c)
 			my_error("ERROR:File corrupted.");
-		prefix_decode(output,a,input,c,256);//TODO: bit_len
+		prefix_decode(output,a,input,c,256);
 		res += (U64)a;
 		fwrite(output,1,a,out);
-		fread(&a,2,1,in);
 	}
 	return res;
 }
@@ -134,7 +150,7 @@ U64 dec_file(FILE *in,FILE *out)
 void bench_file(FILE *in,U32 chunk_size,int bsize)
 {
 	U64 csize = 0,size = 0,a;
-	size_t max_out = FPC_MAX_OUTPUT(chunk_size);
+	size_t max_out = FPC_MAX_OUTPUT(chunk_size,bsize);
 	char *output = (char *)my_malloc(max_out);//TODO
 	char *input = (char *)my_malloc(chunk_size+128);
 	clock_t t0,t1,t2,t3,t4,compt = 0,dect = 0;
@@ -142,7 +158,7 @@ void bench_file(FILE *in,U32 chunk_size,int bsize)
 	//bench
 	while ((a = fread(input,1,chunk_size,in)) > 0){
 		U32 h1 = hash(input,a);
-		
+
 		t0 = clock();
 		comp_block(output,input,a,bsize);
 		t1 = clock();
@@ -152,9 +168,9 @@ void bench_file(FILE *in,U32 chunk_size,int bsize)
 		t3 = clock();
 		size_t tmp = comp_block(output,input,a,bsize);
 		t4 = clock();
-		
+
 		compt += MIN(MIN(MIN(t4-t3,t3-t2),t2-t1),t1-t0);
-		
+
 		t0 = clock();
 		dec_block(input,output,tmp,max_out);
 		t1 = clock();
@@ -165,14 +181,14 @@ void bench_file(FILE *in,U32 chunk_size,int bsize)
 		dec_block(input,output,tmp,max_out);
 		t4 = clock();
 		dect += MIN(MIN(MIN(t4-t3,t3-t2),t2-t1),t1-t0);
-		
+
 		U32 h2 = hash(input,a);
 		if(h1 != h2)
 			my_error("ERROR:Input differs from output.");
 		csize += tmp;
 		size += a;
 	}
-	printf("%llu -> %llu, %.2lf%% of original,ratio = %.3lf\n"
+	printf("%" PRIu64 " -> %" PRIu64 ", %.2lf%% of original,ratio = %.3lf\n"
 			"compression speed %.2lf MB/s, decompression speed %.2lf MB/s\n",size,csize,
 	((double)csize)/((double)size)*100,((double)size)/((double)csize),
 	((double)size)/1024/1024/((double)compt / CLOCKS_PER_SEC),((double)size)/1024/1024/((double)dect / CLOCKS_PER_SEC));
@@ -197,7 +213,7 @@ int main(int argc,char **argv)
 {
 	int bsize = 16 * 1024;
 	int count = 1,bench = 0,compress = 1;
-	
+
 	while(count < argc && argv[count][0] == '-'){
 		if(argv[count][2] != 0)
 			help(argv);
