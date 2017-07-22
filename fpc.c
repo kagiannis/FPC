@@ -16,7 +16,6 @@
 
 //TODO
 //improve header encoding
-//support big endian
 //corrupt input
 #include <assert.h>
 #include <limits.h>
@@ -853,6 +852,7 @@ int prefix_encode(void *output,const void *in,int size,int sym_num)
 	//U32 t[17] = {0};
 	//for(a = 0;a < 256;a++)t[lookup[a].len]++;//debug
 	//for(a = 0;a <= 12;a++)printf("len %d = %.3lf\%\n",a,100*((double)t[a])/256);
+
 	out += write_prefix_descr(lookup,sym_num,out);
 	header_start = out;
 	out += HEADER_SIZE;
@@ -934,7 +934,7 @@ size_t comp_block_adaptive(void * output,void * input,size_t inlen)
 #define MBLOCK (((1 << 16)-1)/STEP)
 #define LOG2(A) log_int(A)
 //#define LOG2(A) (A == 0 ? 0 : round(16*log2(A))) 
-
+//todo int <-> size_t
 	int Cfreq[ADAPT_MOD][256];
 	int dp[ADAPT_MOD];
 	U8 *block_size = (U8 *) fpc_malloc((inlen/STEP)+1);
@@ -951,14 +951,16 @@ size_t comp_block_adaptive(void * output,void * input,size_t inlen)
 	int b = inlen-1;
 	for(int a = inlen - STEP;a >= 0;a -= STEP){
 		int cur = (a / STEP) % ADAPT_MOD;
-		int prev = (cur + 1)%ADAPT_MOD;
-		for(int c = 0;c < 256;c++)
-			Cfreq[cur][c] = Cfreq[prev][c];
+		int prev = (cur + 1) % ADAPT_MOD;
+		
+		memcpy(Cfreq[cur],Cfreq[prev],256*sizeof(int));
 		for(;b >= a;b--)
 			Cfreq[cur][in[b]]++;
+		
 		int best = INT_MAX,bsize = 0;
 		for(int c = 1;c <= MBLOCK && (c*STEP) <= inlen - a;c++){
 			//bits = -sum(ni*log2(ni) + total*log2(total))
+			//TODO take into account ineffeciencies of 
 			int res = 0;
 			for(int d = 0;d < 256;d += 2){
 				int n0 = Cfreq[cur][d] - Cfreq[(cur+c)%ADAPT_MOD][d];
@@ -966,7 +968,15 @@ size_t comp_block_adaptive(void * output,void * input,size_t inlen)
 				res -= n0*LOG2(n0) + n1*LOG2(n1);
 			}
 			res += c*STEP*LOG2(c*STEP);
-			res = (res/16+7)/8 + BLOCK_OVERHEAD + dp[(cur + c)%ADAPT_MOD];
+			if(res == 0)
+				res = 5;
+			else if(res < 16*c*STEP)
+				res = (c*STEP)/8 + BLOCK_OVERHEAD;
+			else
+				res = (res/16)/8 + BLOCK_OVERHEAD;
+			if(res >= c*STEP)
+				res = c*STEP + 4;
+			res += dp[(cur + c)%ADAPT_MOD];
 			//res = prefix_encode(out,in + a,c*STEP,256) + dp[(cur + c)%ADAPT_MOD];
 			if(res <= best){
 				best = res;
