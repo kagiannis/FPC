@@ -23,47 +23,60 @@
 
 #include "fpc.h"
 
-#define NDEBUG
+//#define NDEBUG
 #define MAGIC_NUM 0xf1f2
 #define BLOCK_READ (64 << 20)
 #define MIN(A,B) ((A) < (B)?(A):(B))
-#define ERROR_READ my_error("ERROR:can not read from file");
-#define ERROR_WRITE my_error("ERROR:can not write to file");
+#define ERROR_READ my_error("ERROR:Can not read from file");
+#define ERROR_WRITE my_error("ERROR:Can not write to file");
+#define CHECK(expr) if(unlikely(expr))
+
+#if defined(__GNUC__)
+#	define INLINE static inline __attribute__ ((always_inline))
+#	define likely(x) (__builtin_expect((x) != 0,1))
+#	define unlikely(x) (__builtin_expect((x) != 0,0))
+#else
+#	define INLINE static inline
+#	define likely(x) (x)
+#	define unlikely(x) (x)
+#endif
 
 typedef uint64_t U64;
 typedef uint32_t U32;
 typedef uint16_t U16;
 typedef uint8_t U8;
 
-static inline void
-my_error(const char *s)
+INLINE
+void my_error(const char *s)
 {
         fprintf(stderr,"%s\n",s);
         exit(EXIT_FAILURE);
 }
 
-static inline
+INLINE
 void * my_malloc(size_t size)
 {
 	void * ptr;
 	ptr = malloc(size);
 
-	if(ptr == 0 && size != 0)
-		my_error("ERROR:could not allocate memory\n");
+	CHECK(ptr == 0 && size != 0)
+		my_error("ERROR:Could not allocate memory\n");
 
 	return ptr;
 }
 
+INLINE
 void W16_FILE_LE(FILE *out,U16 a)
 {
-	if(fputc(a,out) == EOF || fputc(a >> 8,out) == EOF)\
+	CHECK(fputc(a,out) == EOF || fputc(a >> 8,out) == EOF)\
 		ERROR_WRITE
 }
 
+INLINE
 U16 R16_FILE_LE(FILE *in)
 {
 	int tmp1,tmp2 = 0;//silence warning
-	if((tmp1 = fgetc(in)) == EOF || (tmp2 = fgetc(in)) == EOF)
+	CHECK((tmp1 = fgetc(in)) == EOF || (tmp2 = fgetc(in)) == EOF)
 		ERROR_READ
 	return tmp1 + (tmp2 << 8);
 }
@@ -109,12 +122,12 @@ U64 comp_file(FILE *in,FILE *out,int bsize)
 	int block = (bsize == 0 ? BLOCK_READ : bsize );
 	U8 *output = (U8 *) my_malloc(FPC_MAX_OUTPUT(block,bsize)),*input = (U8 *) my_malloc(FPC_MAX_OUTPUT(block,bsize));
 	U64 res = 4;
-	U32 a,c,magic = MAGIC_NUM;
+	U32 a,magic = MAGIC_NUM;
 
 	W16_FILE_LE(out,magic);
 	while ((a = fread(input,1,block,in)) > 0){
-		c = comp_block(output,input,a,bsize);
-		if(fwrite(output,1,c,out) != c)
+		U32 c = comp_block(output,input,a,bsize);
+		CHECK(fwrite(output,1,c,out) != c)
 			ERROR_WRITE
 		res += (U64)c;
 	}
@@ -133,14 +146,15 @@ U64 dec_file(FILE *in,FILE *out)
 	U32 a = 0,c;
 
 	a = R16_FILE_LE(in);//LE
-	if(a != MAGIC_NUM)
-		my_error("ERROR:File not compressed.");
+	CHECK(a != MAGIC_NUM)
+		my_error("ERROR:File not compressed");
 
 	while((a = R16_FILE_LE(in)) != 0){
 		c = R16_FILE_LE(in);
-		if(fread(input,1,c,in) != c)
-			my_error("ERROR:File corrupted.");
-		prefix_decode(output,a,input,c,256);
+		CHECK(fread(input,1,c,in) != c)
+			my_error("ERROR:File corrupted");
+		CHECK(prefix_decode(output,a,input,c,256) == -1)
+			my_error("EROOR:File corrupted");
 		res += (U64)a;
 		fwrite(output,1,a,out);
 	}
@@ -183,8 +197,8 @@ void bench_file(FILE *in,U32 chunk_size,int bsize)
 		dect += MIN(MIN(MIN(t4-t3,t3-t2),t2-t1),t1-t0);
 
 		U32 h2 = hash(input,a);
-		if(h1 != h2)
-			my_error("ERROR:Input differs from output.");
+		CHECK(h1 != h2)
+			my_error("ERROR:Input differs from output");
 		csize += tmp;
 		size += a;
 	}
