@@ -1,17 +1,18 @@
 # FPC - Fast Prefix Coder
 
+FPC is a FAST entropy coder utilising prefix codes that has higher compression ration than many AC or ANS implementations for non skewed probability distributions.
+
 ## Features
- * Adaptive block subdivision
+ * Advanced adaptive block subdivision
  * Optimal length limited prefix codes 
  using fast implementation of package - merge algorithm
- * Configurable number of streams (default 3)
- * Configurable max bit length (default 11)
- * Fast even for in-order cpus
+ * Optimised for both in order and out of order cpus
  * Support for both big and little endian cpus
  * License ISC
-## Current Limitations
- * The bit length encoding is simple and hurts compression ratio
- * May segfault when decompressing not trusted files
+## Configuration options
+ * Number of streams (default 3)
+ * Max bit length (default 11)
+ * Adaptive step (default 2048).Lower increases compression ration but it is slower.
 ## Benchmark
 ### file enwik8
 #### i7-6500U

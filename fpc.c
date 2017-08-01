@@ -16,7 +16,6 @@
 
 //TODO
 //improve header encoding
-//corrupt input
 #include <assert.h>
 #include <limits.h>
 #include <stdint.h>
@@ -97,6 +96,7 @@
 #	define INLINE static inline __attribute__ ((always_inline))
 #	define likely(x) (__builtin_expect((x) != 0,1))
 #	define unlikely(x) (__builtin_expect((x) != 0,0))
+#	define PREFETCH(x) __builtin_prefetch(x)
 #	if (__GNUC__ * 100 + __GNUC_MINOR__ >= 403) ||\
 (defined(__clang__) && __has_builtin(__builtin_bswap32) && __has_builtin(__builtin_bswap64))
 #		define BSWAP32(x) __builtin_bswap32(x)
@@ -106,6 +106,7 @@
 #	define INLINE static inline
 #	define likely(x) (x)
 #	define unlikely(x) (x)
+#	define PREFETCH(x)
 #endif
 
 #ifndef BSWAP32
@@ -127,6 +128,7 @@
 
 //types
 #define U16MAX 65535
+#define ARCH_SIZE sizeof(size_t)
 typedef uint64_t U64;
 typedef uint32_t U32;
 typedef uint16_t U16;
@@ -390,11 +392,20 @@ void byte_count(U8 *s,int len,U32 *res,int sym_num)
 	U32 *b2 = b1 + MAX_SYM_NUM,*b3 = b2 + MAX_SYM_NUM;
 	U8 tmp0,tmp1,tmp2,tmp3;
 
-	for(a = 0;a < (len & (~7));a += 4){
+	for(a = 0;a < (len & (~7));a += 8){
 		tmp0 = s[a];
 		tmp1 = s[a+1];
 		tmp2 = s[a+2];
 		tmp3 = s[a+3];
+		res[tmp0]++;
+		b1[tmp1]++;
+		b2[tmp2]++;
+		b3[tmp3]++;
+
+		tmp0 = s[a+4];
+		tmp1 = s[a+5];
+		tmp2 = s[a+6];
+		tmp3 = s[a+7];
 		res[tmp0]++;
 		b1[tmp1]++;
 		b2[tmp2]++;
@@ -442,10 +453,9 @@ void sort_inc(Fsym *input,int num)
 		f1[b]++;
 	}
 }
-
-void construct_dec_table(U8 *header_len,Dnode *lookup,int sym_num)
+//on success return 0
+int construct_dec_table(U8 *header_len,Dnode *lookup,int sym_num)
 {
-	//TODO check invalid input
 	U32 a,b,prev_cum = 0,prev_num = 0,d,base;
 	U32 count_bit[AMAX_BIT_LEN+1] = {0};
 	Dnode tmp;
@@ -460,15 +470,21 @@ void construct_dec_table(U8 *header_len,Dnode *lookup,int sym_num)
 #endif
 
 	//count sort
-	for(a = 0;a < sym_num;a++)
+	for(a = 0;a < sym_num;a++){
 		count_bit[header_len[a]]++;
+		assert(header_len[a] <= MAX_BIT_LEN);
+	}
 	for(a = MAX_BIT_LEN;a != 0;a--){
 		prev_cum += prev_num;
 		prev_num = count_bit[a] << (AMAX_BIT_LEN - a);
 		count_bit[a] = prev_cum;
 	}
 
+	CHECK(count_bit[1] + prev_num != (1 << AMAX_BIT_LEN))
+		return 1;
+
 	//place
+	//TODO it needs a check
 	for(a = 0;a < sym_num;a++){
 		b = header_len[a];
 		if(b == 0)
@@ -480,6 +496,7 @@ void construct_dec_table(U8 *header_len,Dnode *lookup,int sym_num)
 		for(;base < (1 << MAX_BIT_LEN);base += d)
 			lookup[base] = tmp;
 	}
+	return 0;
 }
 
 //assumes it does not contain non existant symbols
@@ -504,11 +521,10 @@ void construct_enc_table(Enode *lookup,Fsym *s,int num)
 	}
 }
 
-//output to Fsym.freq bit_len
 //WARNING!!!:input must have 1 additional free space not counted in num
-//packages[L] conctains elements of L in packages
 void build_prefix_codes(Fsym *input,int num)
 {
+	//packages[L] conctains elements of L in packages
 	int packages[2][MAX_SYM_NUM+1],L,leaf_pos,package_pos,package_num = 0;
 	int tmp,len,a,b,pnum;
 	U8 M[MAX_BIT_LEN][2*MAX_SYM_NUM];//number of leafs up to there - 1
@@ -568,13 +584,14 @@ void build_prefix_codes(Fsym *input,int num)
 	}
 }
 
-U8 *byte_pos,*init_pos,c;
+U8 *byte_pos,*init_pos,*byte_end,c;
 U32 nibble_count;
 
-void init_nibble(U8 *pos)
+void init_nibble(U8 *pos,U8 *end)
 {
 	byte_pos = pos;
 	init_pos = pos;
+	byte_end = end;
 	nibble_count = 0;
 }
 
@@ -587,6 +604,8 @@ INLINE U8 get_nibble()
 	return res;*/
 	//with branch
 	if(nibble_count++%2 == 0){
+		CHECK(byte_pos >= byte_end)
+			return 100;
 		c = *byte_pos++;
 		return c & 15;
 	}else{
@@ -605,23 +624,23 @@ INLINE void put_nibble(U8 n)
 }
 
 //returns number of bytes writen
-U32 flush_nibbles()
+INLINE U32 flush_nibbles()
 {
 	if(nibble_count%2 == 1)
 		*byte_pos++ = c;
 	return byte_pos - init_pos;
 }
 
-U32 get_input_nibbles()
+INLINE U32 get_input_nibbles()
 {
 	return byte_pos - init_pos;
 }
 
 //return bytes written
-U32 write_prefix_descr(Enode *lookup,int sym_num,U8 *res)
+INLINE U32 write_prefix_descr(Enode *lookup,U8 *res,int sym_num)
 {
 	U32 previous,count,a;
-	init_nibble(res);
+	init_nibble(res,0);
 	for(a = 0;a < sym_num;a++){
 		count = 1;
 		previous = lookup[a].len;
@@ -655,26 +674,34 @@ U32 write_prefix_descr(Enode *lookup,int sym_num,U8 *res)
 	return flush_nibbles();
 }
 
-U32 read_prefix_descr(U8 *len,int sym_num,U8 *in)
+//on error return 0
+INLINE U32 read_prefix_descr(U8 *len,U8 *in,U8 *end,int sym_num)
 {
-	//TODO check invalid
 	int bl,previous = 0,a = 0,c;
-	init_nibble(in);
+	init_nibble(in,end);
 	while(a < sym_num){
 		bl = get_nibble();
+		CHECK(bl == 100)
+			return 0;
 		if(bl <= MAX_BIT_LEN){
 			previous = bl;
 			len[a++] = bl;
 		}else if(bl < 15){
 			c = 1+bl-MAX_BIT_LEN;
+			CHECK(a + c > sym_num)
+				return 0;
 			while(c-- > 0)
 				len[a++] = previous;
 		}else{
 			c = 16-MAX_BIT_LEN;
+			CHECK(a + c > sym_num)
+				return 0;
 			while(c-- > 0)
 				len[a++] = previous;
 			do{
 				c = bl = get_nibble();
+				CHECK(c == 100 || a + c > sym_num)
+					return 0;
 				while(c-->0)
 					len[a++] = previous;
 			}while(bl == 15);
@@ -683,14 +710,14 @@ U32 read_prefix_descr(U8 *len,int sym_num,U8 *in)
 	return get_input_nibbles();
 }
 
-void write_header(U16 *pos,U32 *stream_size)
+INLINE void write_header(U16 *pos,U32 *stream_size)
 {
 	for(U32 a = 0;a < NUM_STREAMS-1;a++)
 		W16_LE(pos+a,stream_size[a]);//missaligned LE
 }
 
 //return uncompressed size
-int read_header(U16 *pos,U32 *stream_size)
+INLINE int read_header(U16 *pos,U32 *stream_size)
 {
 	for(U32 a = 0;a < NUM_STREAMS;a++)
 		stream_size[a] = L16_LE(pos+a+1);//LE
@@ -741,21 +768,33 @@ INLINE int prefix_codes_encode(U8 *dest,U8 *src,int sym_num,const Enode *lookup)
 
 
 #ifdef ARCH64
-#	define RENORM_DEC(A){\
-		bits##A |= L64_LE(stream_pos##A) << bits_av##A;\
-		stream_pos##A += (63 - bits_av##A) >> 3;\
-		bits_av##A |= 56;\
-	}
+#	define SUB_CONST 63
+#	define OR_CONST 56
 #else
-#	define RENORM_DEC(A){\
-		bits##A |= L32_LE(stream_pos##A) << bits_av##A;\
-		stream_pos##A += (31 - bits_av##A) >> 3;\
-		bits_av##A |= 24;\
-	}
+#	define SUB_CONST 31
+#	define OR_CONST 24
 #endif
 
+#define RENORM_DEC(A){\
+		PREFETCH(stream_pos##A+320);\
+		bits##A |= LARCH_LE(stream_pos##A) << bits_av##A;\
+		stream_pos##A += (SUB_CONST - bits_av##A) >> 3;\
+		bits_av##A |= OR_CONST;\
+	}
+
 #define RENORM_DEC_END(A)\
-	bits##A |= LARCH_LE(stream_pos##A) << bits_av##A;
+	if(bits_av##A < MAX_BIT_LEN){\
+		int dist;\
+		if((dist = stream_end - stream_pos##A) > 1){\
+			bits##A |= ((size_t)L16_LE(stream_pos##A)) << bits_av##A;\
+			stream_pos##A += 2;\
+			bits_av##A += 16;\
+		}else if (dist > 0){\
+			bits##A |= ((size_t)*stream_pos##A) << bits_av##A;\
+			stream_pos##A ++;\
+			bits_av##A += 8;\
+		}\
+	}
 
 #define DEC_INIT(A){\
 	stream_pos##A = other;\
@@ -771,22 +810,24 @@ INLINE int prefix_codes_encode(U8 *dest,U8 *src,int sym_num,const Enode *lookup)
 	*dest++ = lookup[code].sym;\
 }
 
-#define PREFIX_DEC_END(A){\
-	if(dest >= dest_end)return 0;\
+#define PREFIX_DEC_END(A)\
+	if(dest >= dest_end)break;\
 	code = bits##A & ((1 << MAX_BIT_LEN)-1);\
 	bl = lookup[code].len;\
-	*dest++ = lookup[code].sym;\
 	bits##A >>= bl;\
-}
+	bits_av##A -= bl;\
+	*dest++ = lookup[code].sym;
 
 #define DEC_DECLARE(A)\
 	U32 bits_av##A = 0;\
 	size_t bits##A = 0;\
 	U8 *stream_pos##A;
 
-//src stream should have 8 additional free bytes
+#define TEST_STREAM_END(A)\
+	 && stream_pos##A <= stream_end
+
 //on success return 0
-INLINE int prefix_codes_decode(U8 *dest,int dest_size,U8 *src,int src_size,const Dnode *lookup)
+int prefix_codes_decode(U8 *dest,int dest_size,U8 *src,int src_size,const Dnode *lookup)
 {
 	REPEAT_ARG(NUM_STREAMS,DEC_DECLARE);
 	U32 code,bl;
@@ -798,22 +839,26 @@ INLINE int prefix_codes_decode(U8 *dest,int dest_size,U8 *src,int src_size,const
 	CHECK(src + HEADER_SIZE > stream_end)
 		return 1;
 
+	stream_end -= ARCH_SIZE;
+
 	REPEAT_ARG(DEC(NUM_STREAMS),DEC_INIT)
 	CAT(stream_pos,DEC(NUM_STREAMS)) = other;
 
-	//TODO check invalid
-	while(dest < dest_end){//processes RENORM_NUM*NUM_STREAMS bytes a time
+	while(likely(dest < dest_end REPEAT_ARG(NUM_STREAMS,TEST_STREAM_END))){
+
 		//renormalise
 		REPEAT_ARG(NUM_STREAMS,RENORM_DEC)
+
 		//dec
 		REPEAT(RENORM_NUM,
 			REPEAT_ARG(NUM_STREAMS,PREFIX_DEC))
 	}
+	//finalise
+	stream_end += ARCH_SIZE;
 
-	REPEAT_ARG(NUM_STREAMS,RENORM_DEC_END);
-	//decode one by one
 	dest_end += dest_size%(RENORM_NUM * NUM_STREAMS);
-	for(;;){
+	while(1){
+		REPEAT_ARG(NUM_STREAMS,RENORM_DEC_END);
 		REPEAT_ARG(NUM_STREAMS,PREFIX_DEC_END);
 	}
 	return 0;
@@ -860,9 +905,7 @@ int prefix_encode(void *output,const void *in,int size,int sym_num)
 	//for(a = 0;a < 256;a++)t[lookup[a].len]++;//debug
 	//for(a = 0;a <= 12;a++)printf("len %d = %.3lf %% \n",a,100*((double)t[a])/256);
 
-	init_nibble((U8 *)out);
-
-	out += write_prefix_descr(lookup,sym_num,out);
+	out += write_prefix_descr(lookup,out,sym_num);
 	header_start = out;
 	out += HEADER_SIZE;
 
@@ -903,8 +946,13 @@ int prefix_decode(void * output,int out_size,const void *input,int in_size,int s
 	U8 bit_len[MAX_SYM_NUM];
 	U32 bit_descr_size;
 
-	bit_descr_size = read_prefix_descr(bit_len,sym_num,in);
-	construct_dec_table(bit_len,lookup,sym_num);
+	bit_descr_size = read_prefix_descr(bit_len,in,in + in_size,sym_num);
+	CHECK(bit_descr_size == 0)
+		return -1;
+
+
+	CHECK(construct_dec_table(bit_len,lookup,sym_num) != 0)
+		return -1;
 
 	//decode
 	CHECK(prefix_codes_decode(out,out_size,in + bit_descr_size,in_size - bit_descr_size,lookup))
@@ -928,7 +976,7 @@ size_t comp_block_adaptive(void * output,void * input,size_t inlen)
 #define ADAPT_MOD ((1<<16)/STEP)
 #define MBLOCK (((1 << 16)-1)/STEP)
 #define LOG2(A) log_int(A)
-//#define LOG2(A) (A == 0 ? 0 : round(16*log2(A))) 
+//#define LOG2(A) (A == 0 ? 0 : round(16*log2(A)))
 //todo int <-> size_t
 
 	int Cfreq[ADAPT_MOD][256];
@@ -1023,7 +1071,7 @@ size_t comp_block(void * output,void * input,size_t inlen,int bsize)
 
 size_t dec_block(void * output,void * input,size_t inlen,size_t max_output)
 {
-	char *in = (char *)input,*in_start = (char *)input,*out = (char *)output;
+	char *in = (char *)input,*out_start = (char *)output,*out = (char *)output;
 	char *out_end = out + max_output;
 	while(out < out_end && inlen >= 4){
 		U32 d = L16_LE(in);//LE
@@ -1033,12 +1081,16 @@ size_t dec_block(void * output,void * input,size_t inlen,size_t max_output)
 		CHECK(e > inlen || out + d >= out_end)
 			return DEC_BLOCK_ERROR;
 		CHECK(prefix_decode(out,d,in,e,256) == -1)
+#ifdef TEST_CORRUPT
+			;
+#else
 			return DEC_BLOCK_ERROR;
+#endif
 		out += d;
 		in += e;
 		inlen -= e;
 	}
 	CHECK(inlen != 0)
 		return DEC_BLOCK_ERROR;
-	return (size_t)(in-in_start);
+	return (size_t)(out - out_start);
 }

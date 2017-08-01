@@ -141,7 +141,7 @@ U64 comp_file(FILE *in,FILE *out,int bsize)
 //return decompressed size
 U64 dec_file(FILE *in,FILE *out)
 {
-	U8 output[1<<16],input[(1 << 16)+32];
+	U8 output[1<<16],input[1 << 16];
 	U64 res = 0;
 	U32 a = 0,c;
 
@@ -154,7 +154,7 @@ U64 dec_file(FILE *in,FILE *out)
 		CHECK(fread(input,1,c,in) != c)
 			my_error("ERROR:File corrupted");
 		CHECK(prefix_decode(output,a,input,c,256) == -1)
-			my_error("EROOR:File corrupted");
+			my_error("ERROR:File corrupted");
 		res += (U64)a;
 		fwrite(output,1,a,out);
 	}
@@ -192,7 +192,7 @@ void bench_file(FILE *in,U32 chunk_size,int bsize)
 		t2 = clock();
 		dec_block(input,output,tmp,max_out);
 		t3 = clock();
-		dec_block(input,output,tmp,max_out);
+		a = dec_block(input,output,tmp,max_out);
 		t4 = clock();
 		dect += MIN(MIN(MIN(t4-t3,t3-t2),t2-t1),t1-t0);
 
