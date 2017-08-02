@@ -126,7 +126,7 @@ U64 comp_file(FILE *in,FILE *out,int bsize)
 
 	W16_FILE_LE(out,magic);
 	while ((a = fread(input,1,block,in)) > 0){
-		U32 c = comp_block(output,input,a,bsize);
+		U32 c = FPC_compress(output,input,a,bsize);
 		CHECK(fwrite(output,1,c,out) != c)
 			ERROR_WRITE
 		res += (U64)c;
@@ -153,7 +153,7 @@ U64 dec_file(FILE *in,FILE *out)
 		c = R16_FILE_LE(in);
 		CHECK(fread(input,1,c,in) != c)
 			my_error("ERROR:File corrupted");
-		CHECK(prefix_decode(output,a,input,c,256) == -1)
+		CHECK(FPC_decompress_block(output,a,input,c,256) == -1)
 			my_error("ERROR:File corrupted");
 		res += (U64)a;
 		fwrite(output,1,a,out);
@@ -166,7 +166,7 @@ void bench_file(FILE *in,U32 chunk_size,int bsize)
 	U64 csize = 0,size = 0,a;
 	size_t max_out = FPC_MAX_OUTPUT(chunk_size,bsize);
 	char *output = (char *)my_malloc(max_out);//TODO
-	char *input = (char *)my_malloc(chunk_size+128);
+	char *input = (char *)my_malloc(chunk_size);
 	clock_t t0,t1,t2,t3,t4,compt = 0,dect = 0;
 
 	//bench
@@ -174,30 +174,30 @@ void bench_file(FILE *in,U32 chunk_size,int bsize)
 		U32 h1 = hash(input,a);
 
 		t0 = clock();
-		comp_block(output,input,a,bsize);
+		FPC_compress(output,input,a,bsize);
 		t1 = clock();
-		comp_block(output,input,a,bsize);
+		FPC_compress(output,input,a,bsize);
 		t2 = clock();
-		comp_block(output,input,a,bsize);
+		FPC_compress(output,input,a,bsize);
 		t3 = clock();
-		size_t tmp = comp_block(output,input,a,bsize);
+		size_t tmp = FPC_compress(output,input,a,bsize);
 		t4 = clock();
 
 		compt += MIN(MIN(MIN(t4-t3,t3-t2),t2-t1),t1-t0);
 
 		t0 = clock();
-		dec_block(input,output,tmp,max_out);
+		FPC_decompress(input,a,output,tmp);
 		t1 = clock();
-		dec_block(input,output,tmp,max_out);
+		FPC_decompress(input,a,output,tmp);
 		t2 = clock();
-		dec_block(input,output,tmp,max_out);
+		FPC_decompress(input,a,output,tmp);
 		t3 = clock();
-		a = dec_block(input,output,tmp,max_out);
+		size_t b = FPC_decompress(input,a,output,tmp);
 		t4 = clock();
 		dect += MIN(MIN(MIN(t4-t3,t3-t2),t2-t1),t1-t0);
 
-		U32 h2 = hash(input,a);
-		CHECK(h1 != h2)
+		U32 h2 = hash(input,b);
+		CHECK(a != b || h1 != h2)
 			my_error("ERROR:Input differs from output");
 		csize += tmp;
 		size += a;
@@ -214,7 +214,7 @@ void bench_file(FILE *in,U32 chunk_size,int bsize)
 void help(char **argv)
 {
 	//make decompress default
-	printf("Fast Prefix Coder v0.1\n\n"
+	printf("Fast Prefix Coder by Konstantinos Agiannis\n\n"
 			"usage: %s [options] input [output]\n\n"
 			"  -B           : benchmark file\n"
 			"  -b num       : block size in KB, 1<= num <= 63, 0 for adaptive (default 16)\n"

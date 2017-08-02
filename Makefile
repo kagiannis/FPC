@@ -1,5 +1,5 @@
 CFLAGS = -Wall -O2 -std=c99 -DNDEBUG
-SOURCES = $(wildcard *.c)
+SOURCES = fpc.c cli.c
 
 fpc:
 	cc $(CFLAGS) $(SOURCES) -o $@

@@ -587,7 +587,7 @@ void build_prefix_codes(Fsym *input,int num)
 U8 *byte_pos,*init_pos,*byte_end,c;
 U32 nibble_count;
 
-void init_nibble(U8 *pos,U8 *end)
+INLINE void init_nibble(U8 *pos,U8 *end)
 {
 	byte_pos = pos;
 	init_pos = pos;
@@ -637,7 +637,7 @@ INLINE U32 get_input_nibbles()
 }
 
 //return bytes written
-INLINE U32 write_prefix_descr(Enode *lookup,U8 *res,int sym_num)
+U32 write_prefix_descr(Enode *lookup,U8 *res,int sym_num)
 {
 	U32 previous,count,a;
 	init_nibble(res,0);
@@ -675,7 +675,7 @@ INLINE U32 write_prefix_descr(Enode *lookup,U8 *res,int sym_num)
 }
 
 //on error return 0
-INLINE U32 read_prefix_descr(U8 *len,U8 *in,U8 *end,int sym_num)
+U32 read_prefix_descr(U8 *len,U8 *in,U8 *end,int sym_num)
 {
 	int bl,previous = 0,a = 0,c;
 	init_nibble(in,end);
@@ -716,14 +716,6 @@ INLINE void write_header(U16 *pos,U32 *stream_size)
 		W16_LE(pos+a,stream_size[a]);//missaligned LE
 }
 
-//return uncompressed size
-INLINE int read_header(U16 *pos,U32 *stream_size)
-{
-	for(U32 a = 0;a < NUM_STREAMS;a++)
-		stream_size[a] = L16_LE(pos+a+1);//LE
-	return L16_LE(pos);//LE
-}
-
 //1 stream a time
 //dest should have some 8 more free bytes
 INLINE int prefix_codes_encode(U8 *dest,U8 *src,int sym_num,const Enode *lookup)
@@ -733,7 +725,7 @@ INLINE int prefix_codes_encode(U8 *dest,U8 *src,int sym_num,const Enode *lookup)
 	U32 bits_av = 0,tmp;
 	size_t bits = 0,code;
 
-	while(src < src_end){//????
+	while(src < src_end){
 		REPEAT(RENORM_NUM,
 			sym = *src;
 			code = lookup[sym].val;
@@ -866,7 +858,7 @@ int prefix_codes_decode(U8 *dest,int dest_size,U8 *src,int src_size,const Dnode 
 
 //encode bytes,return bytes written
 //size < 64Kb
-int prefix_encode(void *output,const void *in,int size,int sym_num)
+int FPC_compress_block(void *output,const void *in,int size,int sym_num)
 {
 	U32 a,b,count[MAX_SYM_NUM] = {0},stream_size[NUM_STREAMS],compressed_size;
 	U8 *out_start = (U8 *)output,*header_start,*out = (U8 *)output;
@@ -929,7 +921,7 @@ no_comp:
 
 //return uncompressed bytes
 //on error return -1
-int prefix_decode(void * output,int out_size,const void *input,int in_size,int sym_num)
+int FPC_decompress_block(void * output,int out_size,const void *input,int in_size,int sym_num)
 {
 	if(in_size == 1){//RLE
 		memset(output,*((char*)input),out_size);
@@ -950,7 +942,6 @@ int prefix_decode(void * output,int out_size,const void *input,int in_size,int s
 	CHECK(bit_descr_size == 0)
 		return -1;
 
-
 	CHECK(construct_dec_table(bit_len,lookup,sym_num) != 0)
 		return -1;
 
@@ -960,15 +951,15 @@ int prefix_decode(void * output,int out_size,const void *input,int in_size,int s
 	return in_size;
 }
 
-size_t block_encode(void *output,void *input,int bsize)
+INLINE size_t block_encode(void *output,void *input,int bsize)
 {
 	W16_LE(output,bsize);//LE
-	size_t tmp = prefix_encode(((char *)output) + 4,input,bsize,256);
+	size_t tmp = FPC_compress_block(((char *)output) + 4,input,bsize,256);
 	W16_LE(((char*)output) + 2,tmp);//LE
 	return 4 + tmp;
 }
 
-size_t comp_block_adaptive(void * output,void * input,size_t inlen)
+INLINE size_t comp_adaptive(void * output,void * input,size_t inlen)
 {
 
 #define BLOCK_OVERHEAD 100
@@ -988,7 +979,7 @@ size_t comp_block_adaptive(void * output,void * input,size_t inlen)
 		return 0;//ERROR
 
 	//init
-	int block_end = inlen / STEP;//??
+	int block_end = inlen / STEP;
 	for(int a = 0;a < 256;a++){
 		dp[(block_end+1)%ADAPT_MOD] = 0;
 		Cfreq[(block_end+1)%ADAPT_MOD][a] = 0;
@@ -1053,10 +1044,10 @@ size_t comp_block_adaptive(void * output,void * input,size_t inlen)
 //return compressed size
 //bsize < 64KB
 //if bsize == 0 then adaptive
-size_t comp_block(void * output,void * input,size_t inlen,int bsize)
+size_t FPC_compress(void * output,void * input,size_t inlen,int bsize)
 {
 	if(bsize == 0)
-		return comp_block_adaptive(output,input,inlen);
+		return comp_adaptive(output,input,inlen);
 	char *in = (char *) input,*out = (char *)output,*out_start = (char *)output;
 	while(inlen > 0){
 		U32 step = MIN(inlen,bsize);
@@ -1067,9 +1058,7 @@ size_t comp_block(void * output,void * input,size_t inlen,int bsize)
 	return (size_t)(out - out_start);
 }
 
-#define DEC_BLOCK_ERROR 0
-
-size_t dec_block(void * output,void * input,size_t inlen,size_t max_output)
+size_t FPC_decompress(void * output,size_t max_output,void * input,size_t inlen)
 {
 	char *in = (char *)input,*out_start = (char *)output,*out = (char *)output;
 	char *out_end = out + max_output;
@@ -1078,19 +1067,19 @@ size_t dec_block(void * output,void * input,size_t inlen,size_t max_output)
 		U32 e = L16_LE(in+2);//LE
 		in += 4;
 		inlen -= 4;
-		CHECK(e > inlen || out + d >= out_end)
-			return DEC_BLOCK_ERROR;
-		CHECK(prefix_decode(out,d,in,e,256) == -1)
+		CHECK(e > inlen || out + d > out_end)
+			return 0;
+		CHECK(FPC_decompress_block(out,d,in,e,256) == -1)
 #ifdef TEST_CORRUPT
 			;
 #else
-			return DEC_BLOCK_ERROR;
+			return 0;
 #endif
 		out += d;
 		in += e;
 		inlen -= e;
 	}
 	CHECK(inlen != 0)
-		return DEC_BLOCK_ERROR;
+		return 0;
 	return (size_t)(out - out_start);
 }

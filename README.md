@@ -1,6 +1,6 @@
 # FPC - Fast Prefix Coder
 
-FPC is a FAST entropy coder utilising prefix codes that has higher compression ration than many AC or ANS implementations for non skewed probability distributions.
+FPC is a FAST entropy coder that uses prefix codes (huffman) and has higher compression ration than many AC or ANS implementations for non-skewed probability distributions.
 
 ## Features
  * Advanced adaptive block subdivision
