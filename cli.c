@@ -251,11 +251,11 @@ int main(int argc,char **argv)
 	}
 	if(count >= argc || bsize < 0 || bsize > 63*1024)
 		help(argv);
-	FILE *in = fopen(argv[count++],"r");
+	FILE *in = fopen(argv[count++],"rb");
 	if(in == 0)
 		my_error("ERROR:Unable to open input");
 	if(bench == 0){
-		FILE *out = fopen(argv[count++],"w");
+		FILE *out = fopen(argv[count++],"wb");
 		if(out == 0)
 			my_error("ERROR:Unable to open output");
 		if(count != argc)
@@ -264,10 +264,12 @@ int main(int argc,char **argv)
 			comp_file(in,out,bsize);
 		else
 			dec_file(in,out);
+		fclose(out);
 	}else{
 		if(count != argc)
 			help(argv);
 		bench_file(in,BLOCK_READ,bsize);
 	}
+	fclose(in);
 	return 0;
 }

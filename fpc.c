@@ -30,6 +30,8 @@
 #define MAX_BIT_LEN 11
 #define MAX_SYM_NUM 256
 #define ADAPTIVE_STEP 2048
+#define UNROLL_NUM 1
+#define USE_PREFETCH 1
 
 #define AMAX_BIT_LEN 14
 #define HEADER_SIZE (2*(NUM_STREAMS-1))
@@ -767,12 +769,14 @@ INLINE int prefix_codes_encode(U8 *dest,U8 *src,int sym_num,const Enode *lookup)
 #	define OR_CONST 24
 #endif
 
+#define PREFETCH_STREAM(A)\
+	PREFETCH(stream_pos##A+320);
+
 #define RENORM_DEC(A){\
-		PREFETCH(stream_pos##A+320);\
-		bits##A |= LARCH_LE(stream_pos##A) << bits_av##A;\
-		stream_pos##A += (SUB_CONST - bits_av##A) >> 3;\
-		bits_av##A |= OR_CONST;\
-	}
+	bits##A |= LARCH_LE(stream_pos##A) << bits_av##A;\
+	stream_pos##A += (SUB_CONST - bits_av##A) >> 3;\
+	bits_av##A |= OR_CONST;\
+}
 
 #define RENORM_DEC_END(A)\
 	if(bits_av##A < MAX_BIT_LEN){\
@@ -831,22 +835,28 @@ int prefix_codes_decode(U8 *dest,int dest_size,U8 *src,int src_size,const Dnode 
 	CHECK(src + HEADER_SIZE > stream_end)
 		return 1;
 
-	stream_end -= ARCH_SIZE;
+	stream_end -= UNROLL_NUM * ARCH_SIZE;
 
 	REPEAT_ARG(DEC(NUM_STREAMS),DEC_INIT)
 	CAT(stream_pos,DEC(NUM_STREAMS)) = other;
 
 	while(likely(dest < dest_end REPEAT_ARG(NUM_STREAMS,TEST_STREAM_END))){
 
-		//renormalise
-		REPEAT_ARG(NUM_STREAMS,RENORM_DEC)
+#if USE_PREFETCH == 1
+		REPEAT_ARG(NUM_STREAMS,PREFETCH_STREAM)
+#endif
 
-		//dec
-		REPEAT(RENORM_NUM,
-			REPEAT_ARG(NUM_STREAMS,PREFIX_DEC))
+		REPEAT(UNROLL_NUM,
+			//renormalise
+			REPEAT_ARG(NUM_STREAMS,RENORM_DEC)
+
+			//dec
+			REPEAT(RENORM_NUM,
+				REPEAT_ARG(NUM_STREAMS,PREFIX_DEC))
+		)
 	}
 	//finalise
-	stream_end += ARCH_SIZE;
+	stream_end += UNROLL_NUM * ARCH_SIZE;
 
 	dest_end += dest_size%(RENORM_NUM * NUM_STREAMS);
 	while(1){
