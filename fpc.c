@@ -30,8 +30,6 @@
 #define MAX_BIT_LEN 11
 #define MAX_SYM_NUM 256
 #define ADAPTIVE_STEP 2048
-#define UNROLL_NUM 1
-#define USE_PREFETCH 1
 
 #define AMAX_BIT_LEN 14
 #define HEADER_SIZE (2*(NUM_STREAMS-1))
@@ -56,6 +54,21 @@
 #	else
 #		define RENORM_NUM 1
 #	endif
+#endif
+
+//special arch optimisations
+#if defined(__amd64)
+#	define UNROLL_NUM 2
+#	define USE_PREFETCH 0
+#elif defined(__i386)
+#	define UNROLL_NUM 1
+#	define USE_PREFETCH 0
+#elif defined(__arm__) || defined (__aarch64__)
+#	define UNROLL_NUM 2
+#	define USE_PREFETCH 1
+#else
+#	define UNROLL_NUM 1
+#	define USE_PREFETCH 0
 #endif
 
 //macros
