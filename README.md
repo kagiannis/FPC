@@ -9,12 +9,15 @@ FPC is a FAST entropy coder that uses prefix codes (huffman) and has higher comp
  * Optimised for both in order and out of order cpus
  * Support for both big and little endian cpus
  * License ISC
+
 ## Configuration options
  * Number of streams (default 3)
  * Max bit length (default 11)
  * Adaptive step (default 2048).Lower increases compression ration but it is slower.
+
 ## Benchmark
 Tested using TurboBench
+
 ### silesia.tar
 #### Core i5-4460  CPU @ 3.20GHz
 ```
@@ -33,7 +36,9 @@ Tested using TurboBench
    131948580    62.3     104.39      75.04   FastHF                           silesia.tar
    211957977   100.0    6030.96    6103.20   memcpy                           silesia.tar
 ```
+
 ### enwik8
+
 #### orange pi pc plus allwinner h3
 ```
       C Size  ratio%     C MB/s     D MB/s   Name            File
@@ -51,6 +56,7 @@ Tested using TurboBench
     63648861    63.6      21.80      15.27   FastHF                           enwik8
    100000004   100.0     635.93    1099.78   memcpy                           enwik8
 ```
+
 ### compile
 ```
 make
