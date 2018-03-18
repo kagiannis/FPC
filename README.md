@@ -9,54 +9,54 @@ FPC is a FAST entropy coder that uses prefix codes (huffman) and has higher comp
  * Optimised for both in order and out of order cpus
  * Support for both big and little endian cpus
  * License ISC
+
 ## Configuration options
  * Number of streams (default 3)
  * Max bit length (default 11)
  * Adaptive step (default 2048).Lower increases compression ration but it is slower.
+
 ## Benchmark
-### file enwik8
-#### i7-6500U
-```
-16KB block
-100000000 -> 63155808, 63.16% of original,ratio = 1.583
-compression speed 438.36 MB/s, decompression speed 731.63 MB/s
+Tested using TurboBench
 
-32KB block
-100000000 -> 63415354, 63.42% of original,ratio = 1.577
-compression speed 503.01 MB/s, decompression speed 803.38 MB/s
-  
-adaptive
-100000000 -> 62662924, 62.66% of original,ratio = 1.596
-compression speed 49.70 MB/s, decompression speed 698.06 MB/s
-  
-huff0
-100000000 ->  63258831 (63.26%),  576.3 MB/s ,  694.0 MB/s 
-
-actual output file size for huff0 (non benchmark mode) 63423952
-for fpc actual file size difference is 4 bytes
-(2 bytes magic number + 2 bytes end of stream)
+### silesia.tar
+#### Core i5-4460  CPU @ 3.20GHz
 ```
+      C Size  ratio%     C MB/s     D MB/s   Name            File
+   124509536    58.7      25.32      32.61   fpaq0p_sh                        silesia.tar
+   128317932    60.5     162.82     813.92   fpc 0                            silesia.tar
+   129091908    60.9      35.89      22.03   subotin                          silesia.tar
+   129654526    61.2     476.96     821.30   fpc 16                           silesia.tar
+   129979639    61.3     345.70     483.55   fse                              silesia.tar
+   129989013    61.3     248.55     243.08   zlibh                            silesia.tar
+   130059551    61.4     295.89     591.30   rans_static16                    silesia.tar
+   130134503    61.4     574.79     715.36   fsehuf                           silesia.tar
+   130170979    61.4     548.16     897.28   fpc 32                           silesia.tar
+   130373605    61.5     234.33     229.23   fsc                              silesia.tar
+   130731327    61.7     143.04      44.31   FastAC                           silesia.tar
+   131948580    62.3     104.39      75.04   FastHF                           silesia.tar
+   211957977   100.0    6030.96    6103.20   memcpy                           silesia.tar
+```
+
+### enwik8
+
 #### orange pi pc plus allwinner h3
 ```
-16KB block
-100000000 -> 63155808, 63.16% of original,ratio = 1.583
-compression speed 55.50 MB/s, decompression speed 78.11 MB/s
-
-32KB block
-100000000 -> 63415354, 63.42% of original,ratio = 1.577
-compression speed 59.00 MB/s, decompression speed 79.64 MB/s
-
-adaptive
-100000000 -> 62662924, 62.66% of original,ratio = 1.596
-compression speed 4.04 MB/s, decompression speed 72.70 MB/s
-
-huff0
-100000000 ->  63258831 (63.26%),   52.5 MB/s ,   52.6 MB/s
-
-actual output file size for huff0 (non benchmark mode) 63423952
-for fpc actual file size difference is 4 bytes
-(2 bytes magic number + 2 bytes end of stream)
+      C Size  ratio%     C MB/s     D MB/s   Name            File
+    61251140    61.3       3.62       5.41   fpaq0p_sh                        enwik8
+    62677385    62.7       5.14       3.19   subotin                          enwik8
+    62782152    62.8      13.30      85.07   fpc 0                            enwik8
+    63155812    63.2      61.85      86.17   fpc 16                           enwik8
+    63188022    63.2      19.96       7.13   FastAC                           enwik8
+    63193639    63.2      40.10      62.90   zlibh                            enwik8
+    63202025    63.2      40.61      62.91   fse                              enwik8
+    63287917    63.3      29.37      62.32   rans_static16                    enwik8
+    63327425    63.3      20.31      29.96   fsc                              enwik8
+    63415358    63.4      66.47      90.70   fpc 32                           enwik8
+    63420890    63.4      64.20      61.11   fsehuf                           enwik8
+    63648861    63.6      21.80      15.27   FastHF                           enwik8
+   100000004   100.0     635.93    1099.78   memcpy                           enwik8
 ```
+
 ### compile
 ```
 make
