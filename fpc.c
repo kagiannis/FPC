@@ -30,8 +30,6 @@
 #define MAX_BIT_LEN 11
 #define MAX_SYM_NUM 256
 #define ADAPTIVE_STEP 2048
-#define UNROLL_NUM 1
-#define USE_PREFETCH 1
 
 #define AMAX_BIT_LEN 14
 #define HEADER_SIZE (2*(NUM_STREAMS-1))
@@ -56,6 +54,21 @@
 #	else
 #		define RENORM_NUM 1
 #	endif
+#endif
+
+//special arch optimisations
+#if defined(__amd64)
+#	define UNROLL_NUM 2
+#	define USE_PREFETCH 0
+#elif defined(__i386)
+#	define UNROLL_NUM 1
+#	define USE_PREFETCH 0
+#elif defined(__arm__) || defined (__aarch64__)
+#	define UNROLL_NUM 2
+#	define USE_PREFETCH 1
+#else
+#	define UNROLL_NUM 1
+#	define USE_PREFETCH 0
 #endif
 
 //macros
@@ -460,7 +473,7 @@ int construct_dec_table(U8 *header_len,Dnode *lookup,int sym_num)
 {
 	U32 a,b,prev_cum = 0,prev_num = 0,d,base;
 	U32 count_bit[AMAX_BIT_LEN+1] = {0};
-	Dnode tmp;
+	U16 tmp;
 
 #ifndef NDEBUG
 	for(a = 0,b = 0;a < sym_num;a++){
@@ -492,11 +505,25 @@ int construct_dec_table(U8 *header_len,Dnode *lookup,int sym_num)
 		if(b == 0)
 			continue;
 		d = 1 << b;
-		tmp = (Dnode){(U8)b,(U8)a};
+		//we combine a(symbol) and b(len) into one U16 to avoid 2 stores
+		#ifdef MEM_LITTLE_ENDIAN
+			tmp = (a << 8) | b;
+		#else
+			tmp = (b << 8) | a;
+		#endif
 		base = brev(count_bit[b]);
 		count_bit[b] += 1 << (AMAX_BIT_LEN - b);
-		for(;base < (1 << MAX_BIT_LEN);base += d)
-			lookup[base] = tmp;
+
+		if(d < (1 << MAX_BIT_LEN)){
+			for(;base < (1 << MAX_BIT_LEN);base += d){
+				*(((U16 *)lookup) + base) = tmp;
+				base += d;
+				*(((U16 *)lookup) + base) = tmp;
+			}
+		}
+		else
+			for(;base < (1 << MAX_BIT_LEN);base += d)
+				*(((U16 *)lookup) + base) = tmp;
 	}
 	return 0;
 }
