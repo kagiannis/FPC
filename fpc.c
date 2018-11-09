@@ -473,7 +473,7 @@ int construct_dec_table(U8 *header_len,Dnode *lookup,int sym_num)
 {
 	U32 a,b,prev_cum = 0,prev_num = 0,d,base;
 	U32 count_bit[AMAX_BIT_LEN+1] = {0};
-	Dnode tmp;
+	U16 tmp;
 
 #ifndef NDEBUG
 	for(a = 0,b = 0;a < sym_num;a++){
@@ -505,11 +505,25 @@ int construct_dec_table(U8 *header_len,Dnode *lookup,int sym_num)
 		if(b == 0)
 			continue;
 		d = 1 << b;
-		tmp = (Dnode){(U8)b,(U8)a};
+		//we combine a(symbol) and b(len) into one U16 to avoid 2 stores
+		#ifdef MEM_LITTLE_ENDIAN
+			tmp = (a << 8) | b;
+		#else
+			tmp = (b << 8) | a;
+		#endif
 		base = brev(count_bit[b]);
 		count_bit[b] += 1 << (AMAX_BIT_LEN - b);
-		for(;base < (1 << MAX_BIT_LEN);base += d)
-			lookup[base] = tmp;
+
+		if(d < (1 << MAX_BIT_LEN)){
+			for(;base < (1 << MAX_BIT_LEN);base += d){
+				*(((U16 *)lookup) + base) = tmp;
+				base += d;
+				*(((U16 *)lookup) + base) = tmp;
+			}
+		}
+		else
+			for(;base < (1 << MAX_BIT_LEN);base += d)
+				*(((U16 *)lookup) + base) = tmp;
 	}
 	return 0;
 }
