@@ -1020,8 +1020,8 @@ size_t comp_adaptive(void * output,void * input,size_t inlen)
 	//init
 	int block_end = inlen / STEP;
 	for(int a = 0;a < 256;a++){
-		dp[(block_end+1)%ADAPT_MOD] = 0;
-		Cfreq[(block_end+1)%ADAPT_MOD][a] = 0;
+		dp[block_end%ADAPT_MOD] = 0;
+		Cfreq[block_end%ADAPT_MOD][a] = 0;
 	}
 
 	//compute block sizes
