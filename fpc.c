@@ -29,7 +29,9 @@
 #define NUM_STREAMS 3
 #define MAX_BIT_LEN 11
 #define MAX_SYM_NUM 256
+
 #define ADAPTIVE_STEP 2048
+#define BLOCK_OVERHEAD 100 //assume header used for bit lengths is 100 bytes
 
 #define AMAX_BIT_LEN 14
 #define HEADER_SIZE (2*(NUM_STREAMS-1))
@@ -58,7 +60,7 @@
 
 //special arch optimisations
 #if defined(__amd64)
-#	define UNROLL_NUM 2
+#	define UNROLL_NUM 1
 #	define USE_PREFETCH 0
 #elif defined(__i386)
 #	define UNROLL_NUM 1
@@ -522,7 +524,8 @@ int construct_dec_table(U8 *header_len,Dnode *lookup,int sym_num)
 			}
 		}
 		else
-			for(;base < (1 << MAX_BIT_LEN);base += d)
+		//The for loop is not needed because it iterates only once
+			//for(;base < (1 << MAX_BIT_LEN);base += d) 
 				*(((U16 *)lookup) + base) = tmp;
 	}
 	return 0;
@@ -602,7 +605,7 @@ void build_prefix_codes(Fsym *input,int num)
 	//bit lenght is the number of leaf occurences for each symbol
 	len = 2*num-2;
 	for(a = L-1;a >= 0 && len > 0;a--){
-		leaf_pos = M[a][len-1];//garbage???
+		leaf_pos = M[a][len-1];
 		input[leaf_pos].freq++;
 		//printf("len = %d,leaf_pos = %d\n",len,leaf_pos);
 		len = 2*(len -1 -leaf_pos );
@@ -873,7 +876,7 @@ int prefix_codes_decode(U8 *dest,int dest_size,U8 *src,int src_size,const Dnode 
 		REPEAT_ARG(NUM_STREAMS,PREFETCH_STREAM)
 #endif
 
-		REPEAT(UNROLL_NUM,
+		REPEAT(UNROLL_NUM,// We unroll loop
 			//renormalise
 			REPEAT_ARG(NUM_STREAMS,RENORM_DEC)
 
@@ -996,10 +999,9 @@ INLINE size_t block_encode(void *output,void *input,int bsize)
 	return 4 + tmp;
 }
 
-INLINE size_t comp_adaptive(void * output,void * input,size_t inlen)
+size_t comp_adaptive(void * output,void * input,size_t inlen)
 {
 
-#define BLOCK_OVERHEAD 100
 #define STEP ADAPTIVE_STEP
 #define ADAPT_MOD ((1<<16)/STEP)
 #define MBLOCK (((1 << 16)-1)/STEP)
@@ -1036,10 +1038,13 @@ INLINE size_t comp_adaptive(void * output,void * input,size_t inlen)
 		for(int c = 1;c <= MBLOCK && (c*STEP) <= inlen - a;c++){
 			//bits = -sum(ni*log2(ni) + total*log2(total))
 			int res = 0;
-			for(int d = 0;d < 256;d += 2){
-				int n0 = Cfreq[cur][d] - Cfreq[(cur+c)%ADAPT_MOD][d];
-				int n1 = Cfreq[cur][d+1] - Cfreq[(cur+c)%ADAPT_MOD][d+1];
-				res -= n0*LOG2(n0) + n1*LOG2(n1);
+			int next = (cur+c)%ADAPT_MOD;
+			for(int d = 0;d < 256;d += 4){ //we unroll
+				int n0 = Cfreq[cur][ d ] - Cfreq[next][d];
+				int n1 = Cfreq[cur][d+1] - Cfreq[next][d+1];
+				int n2 = Cfreq[cur][d+2] - Cfreq[next][d+2];
+				int n3 = Cfreq[cur][d+3] - Cfreq[next][d+3];
+				res -= n0*LOG2(n0) + n1*LOG2(n1) + n2*LOG2(n2) + n3*LOG2(n3);
 			}
 			res += c*STEP*LOG2(c*STEP);
 			if(res == 0)
