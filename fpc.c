@@ -60,7 +60,7 @@
 
 //special arch optimisations
 #if defined(__amd64)
-#	define UNROLL_NUM 1
+#	define UNROLL_NUM 2
 #	define USE_PREFETCH 0
 #elif defined(__i386)
 #	define UNROLL_NUM 1
