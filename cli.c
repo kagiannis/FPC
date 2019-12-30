@@ -49,7 +49,7 @@ typedef uint8_t U8;
 INLINE
 void my_error(const char *s)
 {
-        fprintf(stderr,"%s\n",s);
+        perror(s);
         exit(EXIT_FAILURE);
 }
 
