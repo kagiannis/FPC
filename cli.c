@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <errno.h>
 
 #include "fpc.h"
 
@@ -49,8 +50,11 @@ typedef uint8_t U8;
 INLINE
 void my_error(const char *s)
 {
-        perror(s);
-        exit(EXIT_FAILURE);
+	if(errno != 0)
+		perror(s);
+	else
+		fprintf(stderr,"%s\n",s);
+	exit(EXIT_FAILURE);
 }
 
 INLINE
