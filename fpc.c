@@ -1015,7 +1015,9 @@ size_t comp_adaptive(void * output,void * input,size_t inlen)
 	U8 *in = (U8 *)input,*out = (U8 *)output,*out_start = (U8 *) output;
 
 	CHECK(block_size == 0)
-		return 0;//ERROR
+		return 0;//ERROR, can't malloc
+
+	block_size[0] = 0;
 
 	//init
 	int block_end = inlen / STEP;
@@ -1090,6 +1092,7 @@ size_t FPC_compress(void * output,void * input,size_t inlen,int bsize)
 {
 	if(bsize == 0)
 		return comp_adaptive(output,input,inlen);
+
 	char *in = (char *) input,*out = (char *)output,*out_start = (char *)output;
 	while(inlen > 0){
 		U32 step = MIN(inlen,bsize);
