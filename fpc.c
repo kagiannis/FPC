@@ -26,12 +26,18 @@
 
 //config
 //#define NDEBUG
-#define NUM_STREAMS 3
-#define MAX_BIT_LEN 11
+#define NUM_STREAMS 3      // typical values are 1 ... 4.
+                           // Depends on the then number of available registers
+                           // and then the amount of ILP a cpu can extract.
+                           // 3 is a good all-around value.
+
+#define MAX_BIT_LEN 11     // must be >= 9 and <= AMAX_BIT_LEN = 14
 #define MAX_SYM_NUM 256
 
-#define ADAPTIVE_STEP 2048
-#define BLOCK_OVERHEAD 100 //assume header used for bit lengths is 100 bytes
+#define ADAPTIVE_STEP 2048 // smaller value increases compression ratio,
+                           // but compression speed decreases quadratically
+                           // ADAPTIVE_STEP must be >= 256
+#define BLOCK_OVERHEAD 100 // assume header used for bit lengths is 100 bytes
 
 #define AMAX_BIT_LEN 14
 #define HEADER_SIZE (2*(NUM_STREAMS-1))
