@@ -1,8 +1,12 @@
+CC ?= cc
 CFLAGS = -Wall -O2 -std=c99 -DNDEBUG
+DEBS = fpc.h
 SOURCES = fpc.c cli.c
 
-fpc:
-	cc $(CFLAGS) $(SOURCES) -o $@
+.PHONY: clean
+
+fpc: $(SOURCES) $(DEBS)
+	$(CC) $(CFLAGS) $(SOURCES) -o $@
 
 clean:
 	rm -f fpc
