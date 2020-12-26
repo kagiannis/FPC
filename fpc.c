@@ -256,13 +256,13 @@ WRITE(WARCH, size_t,)
 #else
 INLINE U16 L16_LE(const void* ptr)
 {
-	U8 *p = (U8 *)ptr;
+	U8 *p = (U8 *) ptr;
 	return p[0] + (p[1] << 8);
 }
 INLINE void W16_LE(void *ptr, U16 data)
 {
-	U8 *p = (U8 *)ptr;
-	p[0] = (U8)data;
+	U8 *p = (U8 *) ptr;
+	p[0] = (U8) data;
 	p[1] = (U8)(data >> 8);
 }
 	LOAD(L32_LE, U32, BSWAP32)
@@ -314,7 +314,7 @@ const U8 trev[128] = {
 //assume num is 14 bits long
 INLINE U32 brev(U32 num)
 {
-	return ((U32)trev[num >> 7]) + (((U32)trev[num & 127]) << 7);
+	return ((U32) trev[num >> 7]) + (((U32) trev[num & 127]) << 7);
 }
 
 /* compute table
@@ -525,15 +525,15 @@ int construct_dec_table(U8 *header_len, Dnode *lookup, int sym_num)
 
 		if(d < (1 << MAX_BIT_LEN)){
 			for(;base < (1 << MAX_BIT_LEN);base += d){
-				*(((U16 *)lookup) + base) = tmp;
+				*(((U16 *) lookup) + base) = tmp;
 				base += d;
-				*(((U16 *)lookup) + base) = tmp;
+				*(((U16 *) lookup) + base) = tmp;
 			}
 		}
 		else
 		//The for loop is not needed because it iterates only once
 			//for(;base < (1 << MAX_BIT_LEN);base += d) 
-				*(((U16 *)lookup) + base) = tmp;
+				*(((U16 *) lookup) + base) = tmp;
 	}
 	return 0;
 }
@@ -658,7 +658,7 @@ INLINE void put_nibble(U8 n)
 		c = n;
 	}else{
 		c |= n << 4;
-		*byte_pos++ = (U8)c;
+		*byte_pos++ = (U8) c;
 	}
 }
 
@@ -819,7 +819,7 @@ INLINE int prefix_codes_encode(U8 *dest, U8 *src, int sym_num, const Enode *look
 	if(bits_av##A < MAX_BIT_LEN){\
 		int dist;\
 		if((dist = stream_end - stream_pos##A) > 1){\
-			bits##A |= ((size_t)L16_LE(stream_pos##A)) << bits_av##A;\
+			bits##A |= ((size_t) L16_LE(stream_pos##A)) << bits_av##A;\
 			stream_pos##A += 2;\
 			bits_av##A += 16;\
 		}else if (dist > 0){\
@@ -844,7 +844,7 @@ INLINE int prefix_codes_encode(U8 *dest, U8 *src, int sym_num, const Enode *look
 }
 
 #define PREFIX_DEC_END(A)\
-	if(dest >= dest_end)break;\
+	if(dest >= dest_end) break;\
 	code = bits##A & ((1 << MAX_BIT_LEN)-1);\
 	bl = lookup[code].len;\
 	bits##A >>= bl;\
@@ -908,17 +908,17 @@ int prefix_codes_decode(U8 *dest, int dest_size, U8 *src, int src_size, const Dn
 int FPC_compress_block(void *output, const void *in, int size, int sym_num)
 {
 	U32 a, b, count[MAX_SYM_NUM] = {0}, stream_size[NUM_STREAMS], compressed_size;
-	U8 *out_start = (U8 *)output, *header_start, *out = (U8 *)output;
+	U8 *out_start = (U8 *) output, *header_start, *out = (U8 *) output;
 	Fsym s[MAX_SYM_NUM+1];
 	Enode lookup[MAX_SYM_NUM];
 
 	if(size < MIN_COMPRESSIBLE_SIZE)
 		goto no_comp;
 
-	byte_count((U8 *)in, size, count, 256);
+	byte_count((U8 *) in, size, count, 256);
 
 	for(a = 0;a < sym_num;a++)
-		s[a] = (Fsym){(U16)count[a], (U16)a};
+		s[a] = (Fsym){(U16) count[a], (U16) a};
 
 	sort_inc(s, sym_num);
 
@@ -941,15 +941,15 @@ int FPC_compress_block(void *output, const void *in, int size, int sym_num)
 	construct_enc_table(lookup, s, sym_num);
 
 	//U32 t[17] = {0};
-	//for(a = 0;a < 256;a++)t[lookup[a].len]++;//debug
-	//for(a = 0;a <= 12;a++)printf("len %d = %.3lf %% \n", a, 100*((double)t[a])/256);
+	//for(a = 0;a < 256;a++) t[lookup[a].len]++;//debug
+	//for(a = 0;a <= 12;a++) printf("len %d = %.3lf %% \n", a, 100*((double) t[a])/256);
 
 	out += write_prefix_descr(lookup, out, sym_num);
 	header_start = out;
 	out += HEADER_SIZE;
 
 	for(a = 0;a < NUM_STREAMS;a++){
-		b = prefix_codes_encode(out, ((U8 *)in)+a, size-a, lookup);
+		b = prefix_codes_encode(out, ((U8 *) in)+a, size-a, lookup);
 		stream_size[a] = b;
 		out += b;
 	}
@@ -961,7 +961,7 @@ no_comp:
 		return size;
 	}
 
-	write_header((U16 *)header_start, stream_size);
+	write_header((U16 *) header_start, stream_size);
 
 	return compressed_size;
 }
@@ -971,7 +971,7 @@ no_comp:
 int FPC_decompress_block(void * output, int out_size, const void *input, int in_size, int sym_num)
 {
 	if(in_size == 1){//RLE
-		memset(output, *((char*)input), out_size);
+		memset(output, *((char*) input), out_size);
 		return in_size;
 	}
 
@@ -981,7 +981,7 @@ int FPC_decompress_block(void * output, int out_size, const void *input, int in_
 	}
 
 	Dnode lookup[1 << MAX_BIT_LEN];
-	U8 *in = (U8 *)input, *out = (U8 *)output;
+	U8 *in = (U8 *) input, *out = (U8 *) output;
 	U8 bit_len[MAX_SYM_NUM];
 	U32 bit_descr_size;
 
@@ -1001,8 +1001,8 @@ int FPC_decompress_block(void * output, int out_size, const void *input, int in_
 INLINE size_t block_encode(void *output, const void *input, int bsize)
 {
 	W16_LE(output, bsize);//LE
-	size_t tmp = FPC_compress_block(((char *)output) + 4, input, bsize, 256);
-	W16_LE(((char*)output) + 2, tmp);//LE
+	size_t tmp = FPC_compress_block(((char *) output) + 4, input, bsize, 256);
+	W16_LE(((char*) output) + 2, tmp);//LE
 	return 4 + tmp;
 }
 
@@ -1020,7 +1020,7 @@ size_t comp_adaptive(void * output, const void * input, size_t inlen)
 	int dp[ADAPT_MOD];
 	U8 *block_size = (U8 *) malloc((inlen/STEP)+1);
 	const U8 *in = (const U8*) input;
-	U8 *out = (U8 *)output, *out_start = (U8 *) output;
+	U8 *out = (U8 *) output, *out_start = (U8 *) output;
 
 	CHECK(block_size == 0)
 		return 0;//ERROR, can't malloc
@@ -1065,7 +1065,7 @@ size_t comp_adaptive(void * output, const void * input, size_t inlen)
 				res = (res/16)/8 + BLOCK_OVERHEAD;
 			if(res >= c*STEP)
 				res = c*STEP + 4;
-			//printf("pos = %d, bpb = %.2f, bsize = %d, est = %d, real = %d\n", a, 8.0*((double)res)/(c*STEP), c*STEP/1024, res, 4+prefix_encode(out, in + a, c*STEP, 256));
+			//printf("pos = %d, bpb = %.2f, bsize = %d, est = %d, real = %d\n", a, 8.0*((double) res)/(c*STEP), c*STEP/1024, res, 4+prefix_encode(out, in + a, c*STEP, 256));
 			res += dp[(cur + c)%ADAPT_MOD];
 			//res = 4 + prefix_encode(out, in + a, c*STEP, 256) + dp[(cur + c)%ADAPT_MOD];
 			if(res <= best){
@@ -1102,7 +1102,7 @@ size_t FPC_compress(void * output, const void * input, size_t inlen, int bsize)
 		return comp_adaptive(output, input, inlen);
 
 	const char *in = (const char *) input;
-	char *out = (char *)output, *out_start = (char *)output;
+	char *out = (char *) output, *out_start = (char *) output;
 	while(inlen > 0){
 		U32 step = MIN(inlen, bsize);
 		out += block_encode(out, in, step);
@@ -1114,7 +1114,7 @@ size_t FPC_compress(void * output, const void * input, size_t inlen, int bsize)
 
 size_t FPC_decompress(void * output, size_t max_output, const void * input, size_t inlen)
 {
-	char *in = (char *)input, *out_start = (char *)output, *out = (char *)output;
+	char *in = (char *) input, *out_start = (char *) output, *out = (char *) output;
 	char *out_end = out + max_output;
 	while(out < out_end && inlen >= 4){
 		U32 d = L16_LE(in);//LE
