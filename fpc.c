@@ -1114,7 +1114,8 @@ size_t FPC_compress(void * output, const void * input, size_t inlen, int bsize)
 
 size_t FPC_decompress(void * output, size_t max_output, const void * input, size_t inlen)
 {
-	char *in = (char *) input, *out_start = (char *) output, *out = (char *) output;
+	const char *in = (char *) input;
+	char *out_start = (char *) output, *out = (char *) output;
 	char *out_end = out + max_output;
 	while(out < out_end && inlen >= 4){
 		U32 d = L16_LE(in);//LE
