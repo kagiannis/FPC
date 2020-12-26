@@ -998,7 +998,7 @@ int FPC_decompress_block(void * output,int out_size,const void *input,int in_siz
 	return in_size;
 }
 
-INLINE size_t block_encode(void *output,void *input,int bsize)
+INLINE size_t block_encode(void *output,const void *input, int bsize)
 {
 	W16_LE(output,bsize);//LE
 	size_t tmp = FPC_compress_block(((char *)output) + 4,input,bsize,256);
@@ -1006,7 +1006,7 @@ INLINE size_t block_encode(void *output,void *input,int bsize)
 	return 4 + tmp;
 }
 
-size_t comp_adaptive(void * output,void * input,size_t inlen)
+size_t comp_adaptive(void * output,const void * input,size_t inlen)
 {
 
 #define STEP ADAPTIVE_STEP
@@ -1019,7 +1019,8 @@ size_t comp_adaptive(void * output,void * input,size_t inlen)
 	int Cfreq[ADAPT_MOD][256];
 	int dp[ADAPT_MOD];
 	U8 *block_size = (U8 *) malloc((inlen/STEP)+1);
-	U8 *in = (U8 *)input,*out = (U8 *)output,*out_start = (U8 *) output;
+	const U8 *in = (const U8*) input;
+	U8 *out = (U8 *)output,*out_start = (U8 *) output;
 
 	CHECK(block_size == 0)
 		return 0;//ERROR, can't malloc
@@ -1095,12 +1096,13 @@ size_t comp_adaptive(void * output,void * input,size_t inlen)
 //return compressed size
 //bsize < 64KB
 //if bsize == 0 then adaptive
-size_t FPC_compress(void * output,void * input,size_t inlen,int bsize)
+size_t FPC_compress(void * output,const void * input,size_t inlen,int bsize)
 {
 	if(bsize == 0)
 		return comp_adaptive(output,input,inlen);
 
-	char *in = (char *) input,*out = (char *)output,*out_start = (char *)output;
+	const char *in = (const char *) input;
+	char *out = (char *)output,*out_start = (char *)output;
 	while(inlen > 0){
 		U32 step = MIN(inlen,bsize);
 		out += block_encode(out,in,step);
@@ -1110,7 +1112,7 @@ size_t FPC_compress(void * output,void * input,size_t inlen,int bsize)
 	return (size_t)(out - out_start);
 }
 
-size_t FPC_decompress(void * output,size_t max_output,void * input,size_t inlen)
+size_t FPC_decompress(void * output,size_t max_output,const void * input,size_t inlen)
 {
 	char *in = (char *)input,*out_start = (char *)output,*out = (char *)output;
 	char *out_end = out + max_output;
