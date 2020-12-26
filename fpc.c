@@ -297,7 +297,7 @@ int main()
 {
 	int a;
 	for(a = 0;a < 128;a++)
-		printf(" %d,", brev(a, 7));
+		printf(" %d, ", brev(a, 7));
 }
 */
 
@@ -918,7 +918,7 @@ int FPC_compress_block(void *output, const void *in, int size, int sym_num)
 	byte_count((U8 *)in, size, count, 256);
 
 	for(a = 0;a < sym_num;a++)
-		s[a] = (Fsym){(U16)count[a],(U16)a};
+		s[a] = (Fsym){(U16)count[a], (U16)a};
 
 	sort_inc(s, sym_num);
 
@@ -949,7 +949,7 @@ int FPC_compress_block(void *output, const void *in, int size, int sym_num)
 	out += HEADER_SIZE;
 
 	for(a = 0;a < NUM_STREAMS;a++){
-		b = prefix_codes_encode(out,((U8 *)in)+a, size-a, lookup);
+		b = prefix_codes_encode(out, ((U8 *)in)+a, size-a, lookup);
 		stream_size[a] = b;
 		out += b;
 	}
@@ -1079,7 +1079,7 @@ size_t comp_adaptive(void * output, const void * input, size_t inlen)
 	}
 	//now encode using block sizes
 	int a = 0;
-	out += block_encode(out, in,(inlen % STEP) + (block_size[0] * STEP));
+	out += block_encode(out, in, (inlen % STEP) + (block_size[0] * STEP));
 	in += block_size[0] * STEP;
 	a = block_size[0];
 

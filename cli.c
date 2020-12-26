@@ -208,8 +208,8 @@ void bench_file(FILE *in, U32 chunk_size, int bsize)
 	}
 	printf("%" PRIu64 " -> %" PRIu64 ", %.2lf%% of original, ratio = %.3lf\n"
 			"compression speed %.2lf MB/s, decompression speed %.2lf MB/s\n", size, csize,
-	((double)csize)/((double)size)*100,((double)size)/((double)csize),
-	((double)size)/1024/1024/((double)compt / CLOCKS_PER_SEC),((double)size)/1024/1024/((double)dect / CLOCKS_PER_SEC));
+	((double)csize)/((double)size)*100, ((double)size)/((double)csize),
+	((double)size)/1024/1024/((double)compt / CLOCKS_PER_SEC), ((double)size)/1024/1024/((double)dect / CLOCKS_PER_SEC));
 
 	free(input);
 	free(output);
