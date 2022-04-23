@@ -13,7 +13,7 @@ install:
 	install fpc $(PREFIX)/bin
 
 uninstall:
-	rm $(PREFIX)/bin/fpc
+	rm -f $(PREFIX)/bin/fpc
 
 clean:
 	rm -f fpc
