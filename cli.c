@@ -221,7 +221,7 @@ void help(char **argv)
 	printf("Fast Prefix Coder by Konstantinos Agiannis\n\n"
 			"usage: %s [options] input [output]\n\n"
 			"  -B           : benchmark file\n"
-			"  -b num       : block size in KB, 1<= num <= 63, 0 for adaptive (default 16)\n"
+			"  -b num       : block size in KB, 1 <= num <= 63, 0 for adaptive (default 16)\n"
 			//"  -c           : compress\n"
 			"  -d           : decompress\n", *argv);
 	exit(EXIT_FAILURE);

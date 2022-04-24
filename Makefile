@@ -1,4 +1,5 @@
-PREFIX?=/usr/local
+PREFIX ?= /usr/local
+CC ?= cc
 CFLAGS = -Wall -O2 -std=c99 -DNDEBUG
 DEBS = fpc.h
 SOURCES = fpc.c cli.c
